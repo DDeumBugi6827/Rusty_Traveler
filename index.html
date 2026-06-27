@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rusty Traveler - Lobby</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&amp;family=Space+Mono:wght@400;700&amp;family=Work+Sans:wght@400;600&amp;family=DotGothic16&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-tint": "#ffb59a",
+            "on-secondary-container": "#b4c285",
+            "surface-container-lowest": "#0e0e0d",
+            "on-background": "#e4e2df",
+            "primary": "#ffb59a",
+            "on-primary-fixed": "#380d00",
+            "on-secondary-fixed-variant": "#404b1b",
+            "error": "#ffb4ab",
+            "surface": "#131412",
+            "surface-container-high": "#2a2a28",
+            "surface-container": "#1f201e",
+            "secondary": "#bfcd8f",
+            "on-surface-variant": "#d9c2ba",
+            "on-tertiary-container": "#fff1e6",
+            "tertiary-fixed-dim": "#faba75",
+            "on-primary-container": "#fff1ec",
+            "surface-bright": "#393937",
+            "on-tertiary-fixed-variant": "#673d00",
+            "secondary-fixed": "#dbe9a9",
+            "primary-fixed-dim": "#ffb59a",
+            "surface-container-low": "#1b1c1a",
+            "inverse-on-surface": "#30302f",
+            "outline": "#a18c85",
+            "on-error": "#690005",
+            "tertiary": "#faba75",
+            "inverse-primary": "#904c31",
+            "secondary-fixed-dim": "#bfcd8f",
+            "primary-container": "#a45c40",
+            "surface-container-highest": "#353533",
+            "on-primary-fixed-variant": "#72351c",
+            "on-primary": "#561f08",
+            "on-tertiary-fixed": "#2b1700",
+            "on-secondary": "#2a3406",
+            "background": "#131412",
+            "secondary-container": "#45501f",
+            "primary-fixed": "#ffdbce",
+            "surface-dim": "#131412",
+            "on-error-container": "#ffdad6",
+            "error-container": "#93000a",
+            "on-tertiary": "#482900",
+            "inverse-surface": "#e4e2df",
+            "outline-variant": "#53433d",
+            "tertiary-fixed": "#ffdcbb",
+            "tertiary-container": "#976427",
+            "on-surface": "#e4e2df",
+            "surface-variant": "#353533",
+            "on-secondary-fixed": "#171e00"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "gutter": "24px",
+            "unit": "4px",
+            "container-max": "1200px",
+            "margin": "32px"
+          },
+          "fontFamily": {
+            "headline-xl": ["DotGothic16", "sans-serif"],
+            "ui-button": ["DotGothic16", "sans-serif"],
+            "label-sm": ["DotGothic16", "sans-serif"],
+            "body-md": ["DotGothic16", "sans-serif"],
+            "headline-lg-mobile": ["DotGothic16", "sans-serif"],
+            "headline-lg": ["DotGothic16", "sans-serif"]
+          },
+          "fontSize": {
+            "headline-xl": ["36px", {"lineHeight": "1.1", "letterSpacing": "0.1em", "fontWeight": "700"}],
+            "ui-button": ["16px", {"lineHeight": "1.0", "fontWeight": "600"}],
+            "label-sm": ["10px", {"lineHeight": "1.4", "letterSpacing": "0.1em", "fontWeight": "400"}],
+            "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
+            "headline-lg-mobile": ["20px", {"lineHeight": "1.2", "fontWeight": "600"}],
+            "headline-lg": ["28px", {"lineHeight": "1.2", "fontWeight": "600"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    @keyframes flicker {
+      0% { opacity: 0.8; }
+      5% { opacity: 0.9; }
+      10% { opacity: 0.7; }
+      15% { opacity: 1; }
+      20% { opacity: 0.8; }
+      100% { opacity: 0.9; }
+    }
+    .crt-flicker {
+      animation: flicker 0.15s infinite;
+    }
+    .grain-overlay {
+      background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png");
+      opacity: 0.05;
+      pointer-events: none;
+    }
+    .weathered-border {
+      box-shadow: inset 0 0 0 1px rgba(161, 140, 133, 0.2);
+      clip-path: polygon(2% 0, 98% 0, 100% 2%, 100% 98%, 98% 100%, 2% 100%, 0 98%, 0 2%);
+    }
+    .scanline {
+      width: 100%;
+      height: 2px;
+      background: rgba(180, 194, 133, 0.05);
+      position: absolute;
+      animation: scanline 10s linear infinite;
+    }
+    @keyframes scanline {
+      0% { top: 0; }
+      100% { top: 100%; }
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 48;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background overflow-hidden selection:bg-primary/30 selection:text-primary min-h-screen flex flex-col font-body-md">
+<!-- Background Layer -->
+<div class="fixed inset-0 z-0" style="transform: translate(0px, 0px);">
+<div class="absolute inset-0 bg-cover bg-center grayscale contrast-125 opacity-40 mix-blend-multiply" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD6JiX8yJmI9aeRUco9sZYCqvF6LBw6hTDocxDWUCpFsy_4l5ndFapuI_IUBvAljm-mprMfMqnkdzD4kf0y0iCcMyamSwdEwjyfiwMkKlFmrmD7upYyA9WEJKQSlf7YzXzjh1b0O7nPkhyPeVE_2i5FkpydBsv2_Zvt_XjkzF7Ft1Sl4M7lo1VPHtpXs6hS14ZW83mLZMapHi6Iz0DN_2azaB05zlIP12kFUC_1H2TY_LVZ3R_dK6TObj7v4KiWSYKEgKK3jOz0Oko')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-surface-container-lowest opacity-80"></div>
+<div class="absolute inset-0 grain-overlay"></div>
+<div class="scanline"></div>
+</div>
+<!-- Main Content Canvas -->
+<main class="relative z-10 flex-grow flex flex-col items-center px-gutter gap-12 mt-[40vh]">
+<!-- Title Section -->
+<div class="text-center flex flex-col items-center space-y-4">
+<h2 class="font-headline-xl text-headline-xl text-on-background tracking-widest uppercase drop-shadow-[0_0_15px_rgba(255,181,154,0.3)]">
+        RUSTY_TRAVELER
+      </h2>
+<p class="font-label-sm text-label-sm text-on-surface-variant tracking-[0.15em] uppercase opacity-60 max-w-[280px]">
+        Even if we run into each other by chance
+      </p>
+</div>
+<!-- Interaction Hub -->
+<div class="flex flex-col items-center gap-6 w-full max-w-xs">
+<button onclick="window.location.href='/game.html'" class="group relative w-full py-6 bg-surface-container-high border-b-4 border-primary transition-all duration-300 hover:bg-primary hover:text-on-primary active:translate-y-1 active:border-b-0 weathered-border">
+<span class="relative z-10 font-ui-button text-headline-lg-mobile tracking-widest uppercase">
+          PLAY GAME
+        </span>
+<div class="absolute inset-0 bg-primary opacity-0 group-hover:opacity-10 transition-opacity"></div>
+</button>
+</div>
+</main>
+<!-- Micro-interactions Script -->
+<script>
+    document.addEventListener('mousemove', (e) => {
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+      
+      const bg = document.querySelector('.fixed.inset-0');
+      if(bg) {
+        bg.style.transform = `translate(${(x - 0.5) * 10}px, ${(y - 0.5) * 10}px)`;
+      }
+    });
+
+    const playBtn = document.querySelector('button');
+    playBtn.addEventListener('mouseenter', () => {
+      console.log('Static hum intensified...');
+    });
+  </script>
+</body></html>

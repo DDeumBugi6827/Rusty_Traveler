@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rusty Traveler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --accent-font: 'Outfit', sans-serif;
+      --bg-glass: rgba(15, 23, 42, 0.45);
+      --bg-glass-hover: rgba(15, 23, 42, 0.65);
+      --border-glass: rgba(255, 255, 255, 0.08);
+      --border-glass-active: rgba(255, 255, 255, 0.2);
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary-color: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #0b0f19;
+      color: var(--text-color);
+      user-select: none;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Premium Glassmorphism UI Layout */
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      /* Let clicks pass to canvas if not on UI elements */
+      display: grid;
+      grid-template-columns: 350px 1fr 300px;
+      grid-template-rows: auto 1fr auto;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    .ui-overlay * {
+      pointer-events: auto;
+      /* Re-enable clicks for UI components */
+    }
+
+    /* Logo / Header */
+    .header-card {
+      grid-column: 1;
+      grid-row: 1;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .logo-icon {
+      width: 10px;
+      height: 10px;
+      background-color: var(--primary-color);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--primary-color);
+      animation: pulse 2s infinite;
+    }
+
+    .logo-title {
+      font-family: var(--accent-font);
+      font-weight: 800;
+      font-size: 1.2rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      margin-left: auto;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Connection status dot */
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background-color: currentColor;
+      border-radius: 50%;
+    }
+
+    /* Active Users Sidebar */
+    .users-panel {
+      grid-column: 3;
+      grid-row: 2;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 20px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 400px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      align-self: start;
+    }
+
+    .panel-title {
+      font-family: var(--accent-font);
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 10px;
+    }
+
+    .user-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      font-size: 0.85rem;
+      transition: all 0.2s ease;
+    }
+
+    .user-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .user-item.local {
+      border-color: var(--primary-glow);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: #fff;
+    }
+
+    /* Chat Box */
+    .chat-panel {
+      grid-column: 1;
+      grid-row: 2 / span 2;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 20px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 480px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      align-self: end;
+    }
+
+    .chat-messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 8px;
+      margin-bottom: 16px;
+      scrollbar-width: thin;
+    }
+
+    /* Scrollbar Customization */
+    .chat-messages::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .message-body {
+      font-size: 0.85rem;
+      line-height: 1.4;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 8px 12px;
+      border-radius: 12px;
+      border-top-left-radius: 2px;
+      word-break: break-all;
+      color: #e2e8f0;
+    }
+
+    .message.local .message-body {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      border-top-left-radius: 12px;
+      border-top-right-radius: 2px;
+    }
+
+    .message.system .message-body {
+      background: rgba(255, 255, 255, 0.02);
+      font-style: italic;
+      color: var(--text-muted);
+      border: none;
+    }
+
+    .chat-form {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-input {
+      flex-grow: 1;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .chat-input:focus {
+      border-color: var(--primary-color);
+      background: rgba(255, 255, 255, 0.07);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+    }
+
+    .chat-send-btn {
+      background: var(--primary-color);
+      border: none;
+      border-radius: 12px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #0b0f19;
+      transition: all 0.2s ease;
+    }
+
+    .chat-send-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 15px var(--primary-color);
+      filter: brightness(1.1);
+    }
+
+    .chat-send-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Quick Emoji Panel */
+    .emoji-panel {
+      grid-column: 2;
+      grid-row: 3;
+      justify-self: center;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 20px;
+      padding: 12px 20px;
+      display: flex;
+      gap: 12px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      margin-bottom: 8px;
+    }
+
+    .emoji-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      font-size: 1.4rem;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .emoji-btn:hover {
+      transform: scale(1.2) translateY(-4px);
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .emoji-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Mobile Joystick Styles */
+    .joystick-container {
+      position: absolute;
+      bottom: 90px;
+      right: 25px;
+      width: 100px;
+      height: 100px;
+      z-index: 1000;
+      display: none;
+      pointer-events: auto;
+    }
+
+    @media (max-width: 900px) {
+      .joystick-container {
+        display: block;
+      }
+    }
+
+    .joystick-base {
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      position: relative;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      touch-action: none;
+    }
+
+    .joystick-knob {
+      width: 44px;
+      height: 44px;
+      background: #38bdf8;
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
+      touch-action: none;
+    }
+
+    /* Instruction overlay */
+    .instructions-card {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: center;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .keycap {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: monospace;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 8px var(--primary-color);
+      }
+
+      50% {
+        transform: scale(1.2);
+        box-shadow: 0 0 16px var(--primary-color);
+      }
+
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 8px var(--primary-color);
+      }
+    }
+
+    /* Responsive layout tweaks */
+    @media (max-width: 900px) {
+      .ui-overlay {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr auto;
+        overflow-y: auto;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .header-card,
+      .instructions-card,
+      .users-panel,
+      .chat-panel,
+      .emoji-panel {
+        grid-column: 1 !important;
+        width: 100%;
+      }
+
+      .instructions-card {
+        grid-row: 2;
+      }
+
+      .chat-panel {
+        grid-row: 3;
+        height: 250px;
+      }
+
+      .users-panel {
+        display: none;
+        /* Hide active users panel on small screen for layout simplicity */
+      }
+
+      .emoji-panel {
+        grid-row: 4;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <!-- 3D Canvas will be injected here -->
+
+    <!-- Mobile Touch Joystick -->
+    <div id="joystick-container" class="joystick-container">
+      <div id="joystick-base" class="joystick-base">
+        <div id="joystick-knob" class="joystick-knob"></div>
+      </div>
+    </div>
+
+    <!-- Interactive UI Overlay -->
+    <div class="ui-overlay">
+      <!-- Top Left: Header and connection status (Hidden per user request) -->
+      <header class="header-card" style="display: none;">
+        <div class="logo-icon"></div>
+        <h1 class="logo-title">RUSTY_TRAVELER</h1>
+        <div id="connection-status" class="status-badge disconnected">
+          <span class="status-dot"></span>
+          <span class="status-text">Disconnected</span>
+        </div>
+      </header>
+
+      <!-- Top Middle: Help Instructions -->
+      <div class="instructions-card">
+        <span class="keycap">W</span>
+        <span class="keycap">S</span>
+        <span>Move</span>
+        <span>/</span>
+        <span class="keycap">A</span>
+        <span class="keycap">D</span>
+        <span>Turn</span>
+      </div>
+
+      <!-- Middle Left: Chat Window (Hidden per user request) -->
+      <section class="chat-panel" style="display: none;">
+        <div class="panel-title">Chat Messages</div>
+        <div id="chat-messages" class="chat-messages">
+          <div class="message system">
+            <div class="message-body">환영합니다! 연결을 대기 중입니다...</div>
+          </div>
+        </div>
+        <form id="chat-form" class="chat-form" onsubmit="return false;">
+          <input id="chat-input" type="text" class="chat-input" placeholder="메시지를 입력하세요..." autocomplete="off"
+            maxlength="100" />
+          <button type="submit" id="chat-send-btn" class="chat-send-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+      </section>
+
+      <!-- Middle Right: Active Users List (Hidden per user request) -->
+      <aside class="users-panel" style="display: none;">
+        <div class="panel-title">Active Users (<span id="user-count">0</span>)</div>
+        <ul id="user-list" class="user-list">
+          <!-- User items will be injected here -->
+        </ul>
+      </aside>
+
+      <!-- Bottom Middle: Quick Emoji Buttons -->
+      <footer class="emoji-panel">
+        <button class="emoji-btn" data-emoji="👍">👍</button>
+        <button class="emoji-btn" data-emoji="❤️">❤️</button>
+        <button class="emoji-btn" data-emoji="😂">😂</button>
+        <button class="emoji-btn" data-emoji="🎉">🎉</button>
+        <button class="emoji-btn" data-emoji="😮">😮</button>
+      </footer>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
