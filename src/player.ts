@@ -19,45 +19,6 @@ const toonGradient = new THREE.CanvasTexture(canvasGradient);
 toonGradient.minFilter = THREE.NearestFilter;
 toonGradient.magFilter = THREE.NearestFilter;
 
-export function createNametagSprite(name: string, isLocal: boolean = false) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.Sprite();
-
-  // Rounded background
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(4, 4, 248, 56, 12);
-  } else {
-    ctx.rect(4, 4, 248, 56);
-  }
-  ctx.fill();
-
-  // Border glowing/color
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = isLocal ? '#38bdf8' : 'rgba(255, 255, 255, 0.3)';
-  ctx.stroke();
-
-  // Text
-  ctx.font = 'bold 24px "Plus Jakarta Sans", sans-serif';
-  ctx.fillStyle = '#ffffff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(name, 128, 32);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  const spriteMaterial = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    depthTest: true,
-  });
-  const sprite = new THREE.Sprite(spriteMaterial);
-  sprite.scale.set(1.5, 0.375, 1);
-  return sprite;
-}
-
 export function createEmojiSprite(emoji: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 128;

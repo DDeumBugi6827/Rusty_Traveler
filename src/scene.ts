@@ -26,23 +26,6 @@ export function createScene() {
     appContainer.appendChild(renderer.domElement);
   }
 
-  // Toon shading 3-step gradient map creation via canvas (highly compatible and robust)
-  const canvas = document.createElement('canvas');
-  canvas.width = 3;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#000000'; // Dark shadow
-    ctx.fillRect(0, 0, 1, 1);
-    ctx.fillStyle = '#787878'; // Mid shadow
-    ctx.fillRect(1, 0, 1, 1);
-    ctx.fillStyle = '#ffffff'; // Light
-    ctx.fillRect(2, 0, 1, 1);
-  }
-  const gradientMap = new THREE.CanvasTexture(canvas);
-  gradientMap.minFilter = THREE.NearestFilter;
-  gradientMap.magFilter = THREE.NearestFilter;
-
   // Post-apocalyptic dark atmospheric lighting (adjusted for flashlight exploration visibility)
   // Low-intensity deep purple ambient light to tint the dark shadows (adjusted to 0.2)
   const ambientLight = new THREE.AmbientLight(0x2c204d, 0.5);
