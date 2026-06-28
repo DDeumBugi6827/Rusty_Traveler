@@ -7,12 +7,20 @@ export function createScene() {
   scene.background = new THREE.Color(0x0a0a1a);
   scene.fog = new THREE.FogExp2(0x0a0a1a, 0.005);
 
+  // Skydome background using background.png (with fog disabled so it remains fully visible)
+  const skyGeo = new THREE.SphereGeometry(500, 60, 40);
+  skyGeo.scale(-1, 1, 1);
+  const skyTex = new THREE.TextureLoader().load('/background.png');
+  const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, fog: false });
+  const skydome = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(skydome);
+
 
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   // Start at a default position for a flat world
   camera.position.set(0, 15, 20);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, precision: 'highp' });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;

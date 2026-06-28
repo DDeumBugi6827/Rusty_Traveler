@@ -10,9 +10,10 @@ async function bootstrap() {
   // 1. Scene setup
   const { scene, renderer, camera, groundColliders, wallColliders } = createScene();
 
-  // Pixel post-processing shader setup (Pixel size 4, depthEdgeStrength 0.8)
+  // Pixel post-processing shader setup (Pixel size scaled by devicePixelRatio for consistent retro chunkiness on mobile)
   const composer = new EffectComposer(renderer);
-  const renderPixelatedPass = new RenderPixelatedPass(4, scene, camera);
+  const pixelSize = Math.max(4, Math.round(2.5 * window.devicePixelRatio));
+  const renderPixelatedPass = new RenderPixelatedPass(pixelSize, scene, camera);
   renderPixelatedPass.depthEdgeStrength = 2;
   composer.addPass(renderPixelatedPass);
 
@@ -60,7 +61,7 @@ async function bootstrap() {
       peers.clear();
 
       existingPeers.forEach((peerId) => {
-        const peer = new PeerPlayer(scene, peerId, { x: 0, y: 10, z: 0 });
+        const peer = new PeerPlayer(scene, peerId, { x: 0, y: 10, z: 0 }, groundColliders);
         peers.set(peerId, peer);
       });
 
@@ -72,7 +73,7 @@ async function bootstrap() {
       ui.addChatMessage(peerId, 'System', `Player ${shortId} joined the lobby`, 'system');
 
       if (!peers.has(peerId)) {
-        const peer = new PeerPlayer(scene, peerId, { x: 0, y: 10, z: 0 });
+        const peer = new PeerPlayer(scene, peerId, { x: 0, y: 10, z: 0 }, groundColliders);
         peers.set(peerId, peer);
       }
 

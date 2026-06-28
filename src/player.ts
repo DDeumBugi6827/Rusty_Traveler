@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { WebSocketNetwork, Position } from './network';
 
+// Player Dimensions Configuration
+const PLAYER_HEIGHT = 1.0;
+const PLAYER_COLLIDER_RADIUS = 0.35;
+
 // Toon shading 3-step gradient map for players via canvas (highly compatible)
 const canvasGradient = document.createElement('canvas');
 canvasGradient.width = 3;
@@ -65,6 +69,10 @@ export class LocalPlayer {
   private groundColliders: THREE.Object3D[];
   private wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[];
   private raycaster = new THREE.Raycaster();
+  private groundNormal = new THREE.Vector3(0, 1, 0);
+  private targetNormal = new THREE.Vector3(0, 1, 0);
+  private smoothedLookAt = new THREE.Vector3();
+  private isFirstUpdate = true;
 
   // GLB Model & Animation Properties
   private placeholder: THREE.Mesh;
@@ -96,34 +104,34 @@ export class LocalPlayer {
     this.group.position.set(0, 10, 0);
 
     // Create a sleek player mesh (Futuristic capsule bot)
-    const bodyGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16);
+    const bodyGeo = new THREE.CylinderGeometry(PLAYER_COLLIDER_RADIUS * 0.7, PLAYER_COLLIDER_RADIUS * 0.7, PLAYER_HEIGHT * 0.8, 16);
     const bodyMat = new THREE.MeshToonMaterial({
       color: 0x38bdf8,
       gradientMap: toonGradient
     });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.6;
+    body.position.y = (PLAYER_HEIGHT * 0.8) / 2;
     body.castShadow = true;
     body.receiveShadow = true;
     this.group.add(body);
     this.placeholder = body;
 
     // Visor/eyes (glowing emission)
-    const visorGeo = new THREE.BoxGeometry(0.45, 0.15, 0.3);
+    const visorGeo = new THREE.BoxGeometry(0.45 * (PLAYER_HEIGHT / 1.5), 0.15 * (PLAYER_HEIGHT / 1.5), 0.3 * (PLAYER_HEIGHT / 1.5));
     const visorMat = new THREE.MeshStandardMaterial({
       color: 0x00f3ff,
       emissive: 0x00f3ff,
       emissiveIntensity: 1.5,
     });
     const visor = new THREE.Mesh(visorGeo, visorMat);
-    visor.position.set(0, 1.25, 0.2);
+    visor.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 0.2 * (PLAYER_HEIGHT / 1.5));
     this.group.add(visor);
     this.visorPlaceholder = visor;
 
     // Flashlight SpotLight setup for LocalPlayer (White, eye-level, positioned slightly forward to prevent self-shadowing)
     const flashlight = new THREE.SpotLight(0xffffff, 15, 25, Math.PI / 6, 0.5, 1.0);
-    flashlight.position.set(0, 1.25, 0.35);
-    flashlight.target.position.set(0, 1.25, 5);
+    flashlight.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 0.35 * (PLAYER_HEIGHT / 1.5));
+    flashlight.target.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 5);
     flashlight.castShadow = true;
     flashlight.shadow.bias = -0.002;
     flashlight.shadow.mapSize.width = 512;
@@ -164,7 +172,7 @@ export class LocalPlayer {
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
 
-        const targetHeight = 1.5;
+        const targetHeight = PLAYER_HEIGHT;
         const scale = targetHeight / (size.y || 1);
         this.model.scale.set(scale, scale, scale);
 
@@ -292,7 +300,7 @@ export class LocalPlayer {
     const sprite = createEmojiSprite(emoji);
     sprite.position.set(
       (Math.random() - 0.5) * 0.2,
-      1.8,
+      PLAYER_HEIGHT * 1.2,
       (Math.random() - 0.5) * 0.2
     );
     this.group.add(sprite);
@@ -328,8 +336,10 @@ export class LocalPlayer {
     // Add joystick forward/backward speed
     step += this.joystickInput.y * this.speed;
 
-    // Apply rotation
-    this.group.rotation.y = this.yawAngle;
+    // Apply rotation and normal alignment
+    const qNormal = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), this.groundNormal);
+    const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yawAngle);
+    this.group.quaternion.copy(qNormal).multiply(qYaw);
 
     // Compute tangent forward direction in world space (aligned with model facing local +Z)
     const localForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion).normalize();
@@ -337,8 +347,8 @@ export class LocalPlayer {
     // 2.3 Wall Collision & Sliding Physics (BoundingBox + Raycaster)
     let canMove = true;
     if (Math.abs(step) > 0.0001 && this.wallColliders && this.wallColliders.length > 0) {
-      const playerRadius = 0.45;
-      const playerHeight = 1.5;
+      const playerRadius = PLAYER_COLLIDER_RADIUS;
+      const playerHeight = PLAYER_HEIGHT;
       const moveVec = localForward.clone().multiplyScalar(step);
 
       // Compute player's candidate position and bounding box
@@ -362,7 +372,7 @@ export class LocalPlayer {
         const rayDir = localForward.clone().multiplyScalar(Math.sign(step)).normalize();
         const rayOrigin = new THREE.Vector3(
           this.group.position.x,
-          this.group.position.y + 0.5, // Center of player height
+          this.group.position.y + playerHeight * 0.33, // Center of player height
           this.group.position.z
         );
 
@@ -416,39 +426,64 @@ export class LocalPlayer {
       this.group.position.addScaledVector(localForward, step);
     }
 
-    // Snap to ground using Raycaster (from y + 4 to avoid ceilings) on groundColliders
+    // Snap to ground using Raycaster along the ground normal (localUp)
     if (this.groundColliders && this.groundColliders.length > 0) {
-      this.raycaster.set(
-        new THREE.Vector3(this.group.position.x, this.group.position.y + 4, this.group.position.z),
-        new THREE.Vector3(0, -1, 0)
-      );
+      const localUp = this.groundNormal.clone().normalize();
+      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 4);
+      const rayDirection = localUp.clone().negate();
+
+      this.raycaster.set(rayOrigin, rayDirection);
       const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
       if (intersects.length > 0) {
-        this.group.position.y = intersects[0].point.y;
+        const hit = intersects[0];
+        if (hit.face && hit.object) {
+          const worldNormal = hit.face.normal.clone();
+          worldNormal.transformDirection(hit.object.matrixWorld);
+          
+          this.targetNormal.copy(worldNormal);
+          this.group.position.copy(hit.point);
+        }
       }
     } else {
       this.group.position.y = 0;
+      this.targetNormal.set(0, 1, 0);
     }
 
-    // 3. Smooth 3rd-person follow camera tracking in flat space
-    const followDistance = 6.5;
-    const followHeight = 3.8;
+    // Smoothly interpolate the ground normal
+    this.groundNormal.lerp(this.targetNormal, 0.015);
+    this.groundNormal.normalize();
+
+    // 3. Smooth 3rd-person follow camera tracking in spherical space
+    const followDistance = 4.5;
+    const followHeight = 2.6;
 
     // Ideal camera position behind player (along -localForward) and above player
+    const localUp = this.groundNormal.clone().normalize();
     const targetCamPos = this.group.position.clone()
-      .addScaledVector(localForward, -followDistance);
-    targetCamPos.y += followHeight;
+      .addScaledVector(localForward, -followDistance)
+      .addScaledVector(localUp, followHeight);
 
-    // Lerp camera position
-    this.camera.position.lerp(targetCamPos, 0.08);
+    // Camera looks at the player (slightly offset up along ground normal)
+    const targetLookAt = this.group.position.clone().addScaledVector(localUp, PLAYER_HEIGHT * (1.0 / 1.5));
 
-    // Keep camera up vector aligned to standard +Y
-    this.camera.up.set(0, 1, 0);
+    if (this.isFirstUpdate) {
+      this.smoothedLookAt.copy(targetLookAt);
+      this.camera.position.copy(targetCamPos);
+      this.camera.up.copy(localUp);
+      this.isFirstUpdate = false;
+    } else {
+      // Lerp camera position slowly for extra smoothness over bumpy terrain
+      this.camera.position.lerp(targetCamPos, 0.04);
 
-    // Camera looks at the player (slightly offset up along Y)
-    const targetLookAt = this.group.position.clone();
-    targetLookAt.y += 1.0;
-    this.camera.lookAt(targetLookAt);
+      // Keep camera up vector aligned to ground normal with smooth lerp
+      this.camera.up.lerp(localUp, 0.03);
+      this.camera.up.normalize();
+
+      // Lerp look-at point slowly to prevent camera jerking on height snaps
+      this.smoothedLookAt.lerp(targetLookAt, 0.04);
+    }
+
+    this.camera.lookAt(this.smoothedLookAt);
 
     // Network update rate control (10Hz)
     const now = performance.now();
@@ -586,43 +621,49 @@ export class PeerPlayer {
   private isDestroyed = false;
   private modelRotationY = 0;
 
-  constructor(scene: THREE.Scene, id: string, startPos: Position) {
+  private groundColliders: THREE.Object3D[];
+  private raycaster = new THREE.Raycaster();
+  private groundNormal = new THREE.Vector3(0, 1, 0);
+  private targetNormal = new THREE.Vector3(0, 1, 0);
+
+  constructor(scene: THREE.Scene, id: string, startPos: Position, groundColliders: THREE.Object3D[] = []) {
     this.scene = scene;
     this.id = id;
     this.targetPosition = new THREE.Vector3(startPos.x, startPos.y, startPos.z);
+    this.groundColliders = groundColliders;
 
     this.group = new THREE.Group();
     this.group.position.set(startPos.x, startPos.y, startPos.z);
 
     // Peer player Mesh (Purple capsule bot) with toon shading
-    const bodyGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16);
+    const bodyGeo = new THREE.CylinderGeometry(PLAYER_COLLIDER_RADIUS * 0.7, PLAYER_COLLIDER_RADIUS * 0.7, PLAYER_HEIGHT * 0.8, 16);
     const bodyMat = new THREE.MeshToonMaterial({
       color: 0xd946ef, // Neon violet
       gradientMap: toonGradient
     });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.6;
+    body.position.y = (PLAYER_HEIGHT * 0.8) / 2;
     body.castShadow = true;
     body.receiveShadow = true;
     this.group.add(body);
     this.placeholder = body;
 
     // Visor/eyes
-    const visorGeo = new THREE.BoxGeometry(0.45, 0.15, 0.3);
+    const visorGeo = new THREE.BoxGeometry(0.45 * (PLAYER_HEIGHT / 1.5), 0.15 * (PLAYER_HEIGHT / 1.5), 0.3 * (PLAYER_HEIGHT / 1.5));
     const visorMat = new THREE.MeshStandardMaterial({
       color: 0xff00ff,
       emissive: 0xff00ff,
       emissiveIntensity: 1.5,
     });
     const visor = new THREE.Mesh(visorGeo, visorMat);
-    visor.position.set(0, 1.25, 0.2);
+    visor.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 0.2 * (PLAYER_HEIGHT / 1.5));
     this.group.add(visor);
     this.visorPlaceholder = visor;
 
     // Flashlight SpotLight setup for PeerPlayer (White, eye-level, positioned slightly forward to prevent self-shadowing)
     const flashlight = new THREE.SpotLight(0xffa500, 12, 25, Math.PI / 6, 0.5, 1.0);
-    flashlight.position.set(0, 1.25, 0.35);
-    flashlight.target.position.set(0, 1.25, 5);
+    flashlight.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 0.35 * (PLAYER_HEIGHT / 1.5));
+    flashlight.target.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 5);
     flashlight.castShadow = true;
     flashlight.shadow.bias = -0.002;
     flashlight.shadow.mapSize.width = 512;
@@ -668,7 +709,7 @@ export class PeerPlayer {
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
 
-        const targetHeight = 1.5;
+        const targetHeight = PLAYER_HEIGHT;
         const scale = targetHeight / (size.y || 1);
         this.model.scale.set(scale, scale, scale);
 
@@ -732,7 +773,7 @@ export class PeerPlayer {
     const sprite = createEmojiSprite(emoji);
     sprite.position.set(
       (Math.random() - 0.5) * 0.2,
-      1.8,
+      PLAYER_HEIGHT * 1.2,
       (Math.random() - 0.5) * 0.2
     );
     this.group.add(sprite);
@@ -750,12 +791,59 @@ export class PeerPlayer {
     const prevPos = this.group.position.clone();
     this.group.position.lerp(this.targetPosition, 0.15);
 
-    // Calculate rotation towards movement direction on flat XZ plane
+    // Snap to ground using Raycaster along the ground normal (localUp)
+    if (this.groundColliders && this.groundColliders.length > 0) {
+      const localUp = this.groundNormal.clone().normalize();
+      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 4);
+      const rayDirection = localUp.clone().negate();
+
+      this.raycaster.set(rayOrigin, rayDirection);
+      const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        if (hit.face && hit.object) {
+          const worldNormal = hit.face.normal.clone();
+          worldNormal.transformDirection(hit.object.matrixWorld);
+          this.targetNormal.copy(worldNormal);
+          this.group.position.copy(hit.point);
+        }
+      }
+    }
+
+    this.groundNormal.lerp(this.targetNormal, 0.015);
+    this.groundNormal.normalize();
+
+    // Calculate rotation towards movement direction on tangent plane
     const movement = this.group.position.clone().sub(prevPos);
-    const isMoving = movement.x * movement.x + movement.z * movement.z > 0.0001;
+    const isMoving = (movement.x * movement.x + movement.z * movement.z + movement.y * movement.y) > 0.0001;
+    
+    const up = this.groundNormal.clone().normalize();
+    let projectedForward: THREE.Vector3;
+
     if (isMoving) {
-      const angle = Math.atan2(movement.x, movement.z);
-      this.group.rotation.y = angle;
+      const forward = movement.clone().normalize();
+      projectedForward = forward.clone().sub(up.clone().multiplyScalar(forward.dot(up))).normalize();
+    } else {
+      const currentForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion).normalize();
+      projectedForward = currentForward.clone().sub(up.clone().multiplyScalar(currentForward.dot(up))).normalize();
+    }
+
+    if (projectedForward.lengthSq() < 0.0001) {
+      const fallbackForward = new THREE.Vector3(0, 0, 1);
+      projectedForward.crossVectors(up, fallbackForward).normalize();
+      if (projectedForward.lengthSq() < 0.0001) {
+        projectedForward.crossVectors(new THREE.Vector3(1, 0, 0), up).normalize();
+      }
+    }
+
+    const right = new THREE.Vector3().crossVectors(up, projectedForward).normalize();
+    const matrix = new THREE.Matrix4().makeBasis(right, up, projectedForward);
+    const targetQuaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+    
+    if (isMoving) {
+      this.group.quaternion.slerp(targetQuaternion, 0.15);
+    } else {
+      this.group.quaternion.copy(targetQuaternion);
     }
 
     // Emojis update
