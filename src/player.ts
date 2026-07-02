@@ -91,7 +91,8 @@ export class LocalPlayer {
     network: WebSocketNetwork,
     id: string,
     groundColliders: THREE.Object3D[],
-    wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[]
+    wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[],
+    onModelLoaded?: () => void
   ) {
     this.scene = scene;
     this.camera = camera;
@@ -220,6 +221,10 @@ export class LocalPlayer {
         if (this.idleAction) {
           this.idleAction.play();
         }
+
+        if (onModelLoaded) {
+          onModelLoaded();
+        }
       },
       undefined,
       (error) => {
@@ -314,6 +319,7 @@ export class LocalPlayer {
   }
 
   public update() {
+    const prevPos = this.group.position.clone();
     // 1. Rotation (Yaw): A/D or Left/Right arrows rotate the character around their local Y axis
     const rotationSpeed = 0.045;
     if (this.keys['a'] || this.keys['arrowleft']) {
@@ -344,105 +350,100 @@ export class LocalPlayer {
     // Compute tangent forward direction in world space (aligned with model facing local +Z)
     const localForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion).normalize();
 
-    // 2.3 Wall Collision & Sliding Physics (BoundingBox + Raycaster)
+    // 2.3 Wall Collision & Sliding Physics (Raycast-based for spherical compatibility)
     let canMove = true;
     if (Math.abs(step) > 0.0001 && this.wallColliders && this.wallColliders.length > 0) {
       const playerRadius = PLAYER_COLLIDER_RADIUS;
       const playerHeight = PLAYER_HEIGHT;
       const moveVec = localForward.clone().multiplyScalar(step);
 
-      // Compute player's candidate position and bounding box
-      const candidatePos = this.group.position.clone().add(moveVec);
-      const playerBox = new THREE.Box3(
-        new THREE.Vector3(candidatePos.x - playerRadius, candidatePos.y, candidatePos.z - playerRadius),
-        new THREE.Vector3(candidatePos.x + playerRadius, candidatePos.y + playerHeight, candidatePos.z + playerRadius)
-      );
+      // Ray origin is at the center of the player's height along localUp
+      const localUp = this.groundNormal.clone().normalize();
+      const rayOrigin = this.group.position.clone().addScaledVector(localUp, playerHeight * 0.5);
+      const rayDir = moveVec.clone().normalize();
 
-      // 1. Fast BoundingBox Collision Check
-      let collidedWall: { mesh: THREE.Mesh; box: THREE.Box3 } | null = null;
-      for (const wall of this.wallColliders) {
-        if (playerBox.intersectsBox(wall.box)) {
-          collidedWall = wall;
-          break;
-        }
-      }
+      // Collect all wall meshes for raycasting
+      const wallMeshes = this.wallColliders.map(w => w.mesh);
 
-      // 2. If collided, perform precise Raycast to find the normal and apply sliding
-      if (collidedWall) {
-        const rayDir = localForward.clone().multiplyScalar(Math.sign(step)).normalize();
-        const rayOrigin = new THREE.Vector3(
-          this.group.position.x,
-          this.group.position.y + playerHeight * 0.33, // Center of player height
-          this.group.position.z
-        );
+      this.raycaster.set(rayOrigin, rayDir);
+      // Limit far distance to playerRadius + step size
+      this.raycaster.far = playerRadius + Math.abs(step);
+      
+      const intersects = this.raycaster.intersectObjects(wallMeshes, true);
 
-        this.raycaster.set(rayOrigin, rayDir);
-        const intersects = this.raycaster.intersectObject(collidedWall.mesh, true);
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        if (hit.face) {
+          const normal = hit.face.normal.clone();
+          if (hit.object) {
+            normal.transformDirection(hit.object.matrixWorld);
+          }
 
-        if (intersects.length > 0) {
-          const hit = intersects[0];
-          if (hit.face) {
-            const normal = hit.face.normal.clone();
-            if (hit.object) {
-              normal.transformDirection(hit.object.matrixWorld);
-            }
-
-            if (moveVec.dot(normal) < 0) {
-              // Project movement onto the wall plane: slideVec = moveVec - (moveVec . normal) * normal
-              const slideVec = moveVec.clone().sub(normal.multiplyScalar(moveVec.dot(normal)));
-              if (slideVec.lengthSq() > 0.0001) {
-                const slidePos = this.group.position.clone().add(slideVec);
-                const slidePlayerBox = new THREE.Box3(
-                  new THREE.Vector3(slidePos.x - playerRadius, slidePos.y, slidePos.z - playerRadius),
-                  new THREE.Vector3(slidePos.x + playerRadius, slidePos.y + playerHeight, slidePos.z + playerRadius)
-                );
-
-                // Verify if the sliding position intersects any wall BoundingBox
-                let slideCollided = false;
-                for (const wall of this.wallColliders) {
-                  if (slidePlayerBox.intersectsBox(wall.box)) {
-                    slideCollided = true;
-                    break;
-                  }
-                }
-
-                if (!slideCollided) {
-                  this.group.position.add(slideVec);
-                  canMove = false; // Moved by sliding
-                }
+          if (moveVec.dot(normal) < 0) {
+            // Project movement onto the wall plane: slideVec = moveVec - (moveVec . normal) * normal
+            const slideVec = moveVec.clone().sub(normal.multiplyScalar(moveVec.dot(normal)));
+            if (slideVec.lengthSq() > 0.0001) {
+              // Verify if the sliding direction also hits a wall within playerRadius
+              const slideRayDir = slideVec.clone().normalize();
+              this.raycaster.set(rayOrigin, slideRayDir);
+              this.raycaster.far = playerRadius;
+              
+              const slideIntersects = this.raycaster.intersectObjects(wallMeshes, true);
+              if (slideIntersects.length === 0) {
+                // Safe to slide!
+                this.group.position.add(slideVec);
+                canMove = false;
               }
             }
           }
 
-          // If sliding wasn't possible or slide also collided, player is blocked
           if (canMove) {
-            canMove = false;
+            canMove = false; // Blocked
           }
         }
       }
+      this.raycaster.far = Infinity; // Reset raycaster.far
     }
 
     if (canMove) {
       this.group.position.addScaledVector(localForward, step);
     }
 
-    // Snap to ground using Raycaster along the ground normal (localUp)
+    // Snap to ground using Raycaster along localUp in world space
     if (this.groundColliders && this.groundColliders.length > 0) {
       const localUp = this.groundNormal.clone().normalize();
-      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 4);
+      // Start raycast from 1.0 unit above the player's current position to avoid hitting high ceilings/ledges
+      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 1.0);
       const rayDirection = localUp.clone().negate();
 
       this.raycaster.set(rayOrigin, rayDirection);
       const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
-      if (intersects.length > 0) {
-        const hit = intersects[0];
+      
+      let groundHit: THREE.Intersection | null = null;
+      let groundNormal = new THREE.Vector3();
+
+      for (const hit of intersects) {
         if (hit.face && hit.object) {
           const worldNormal = hit.face.normal.clone();
           worldNormal.transformDirection(hit.object.matrixWorld);
           
-          this.targetNormal.copy(worldNormal);
-          this.group.position.copy(hit.point);
+          // Check if this face is flat enough to be ground relative to our current normal
+          const dot = worldNormal.dot(localUp);
+          if (dot >= 0.707) { // Slope angle <= 45 degrees
+            groundHit = hit;
+            groundNormal.copy(worldNormal);
+            break; // Found the closest valid ground!
+          }
         }
+      }
+
+      if (groundHit) {
+        // Safe to snap and update our target normal
+        this.targetNormal.copy(groundNormal);
+        this.group.position.copy(groundHit.point);
+      } else {
+        // If we hit a wall/slope too steep to climb, revert position
+        this.group.position.copy(prevPos);
       }
     } else {
       this.group.position.y = 0;
@@ -791,22 +792,37 @@ export class PeerPlayer {
     const prevPos = this.group.position.clone();
     this.group.position.lerp(this.targetPosition, 0.15);
 
-    // Snap to ground using Raycaster along the ground normal (localUp)
+    // Snap to ground using Raycaster along localUp in world space
     if (this.groundColliders && this.groundColliders.length > 0) {
       const localUp = this.groundNormal.clone().normalize();
-      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 4);
+      // Start raycast from 1.0 unit above the peer's current position to avoid hitting high ceilings/ledges
+      const rayOrigin = this.group.position.clone().addScaledVector(localUp, 1.0);
       const rayDirection = localUp.clone().negate();
 
       this.raycaster.set(rayOrigin, rayDirection);
       const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
-      if (intersects.length > 0) {
-        const hit = intersects[0];
+      
+      let groundHit: THREE.Intersection | null = null;
+      let groundNormal = new THREE.Vector3();
+
+      for (const hit of intersects) {
         if (hit.face && hit.object) {
           const worldNormal = hit.face.normal.clone();
           worldNormal.transformDirection(hit.object.matrixWorld);
-          this.targetNormal.copy(worldNormal);
-          this.group.position.copy(hit.point);
+          
+          // Check if this face is flat enough to be ground relative to our current normal
+          const dot = worldNormal.dot(localUp);
+          if (dot >= 0.707) { // Slope angle <= 45 degrees
+            groundHit = hit;
+            groundNormal.copy(worldNormal);
+            break; // Found the closest valid ground!
+          }
         }
+      }
+
+      if (groundHit) {
+        this.targetNormal.copy(groundNormal);
+        this.group.position.copy(groundHit.point);
       }
     }
 

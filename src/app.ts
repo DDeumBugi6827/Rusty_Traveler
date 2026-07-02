@@ -1,4 +1,4 @@
-import { createScene } from './scene';
+import { createScene, setOnMapLoaded } from './scene';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -7,6 +7,43 @@ import { LocalPlayer, PeerPlayer } from './player';
 import { GameUI } from './ui';
 
 async function bootstrap() {
+  let mapLoaded = false;
+  let playerLoaded = false;
+  let loadingScreenHidden = false;
+
+  function hideLoadingScreen() {
+    if (loadingScreenHidden) return;
+    loadingScreenHidden = true;
+
+    const loadingStatus = document.getElementById('loading-status');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingStatus) {
+      loadingStatus.textContent = 'CONNECTED';
+    }
+    setTimeout(() => {
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+      }
+    }, 500);
+  }
+
+  function checkLoadingComplete() {
+    if (mapLoaded && playerLoaded) {
+      hideLoadingScreen();
+    }
+  }
+
+  // Register map loaded callback
+  setOnMapLoaded(() => {
+    mapLoaded = true;
+    checkLoadingComplete();
+  });
+
+  // Safety timeout (4.0 seconds) to prevent stuck loading screen in offline mode
+  setTimeout(() => {
+    hideLoadingScreen();
+  }, 4000);
+
   // 1. Scene setup
   const { scene, renderer, camera, groundColliders, wallColliders } = createScene();
 
@@ -54,7 +91,10 @@ async function bootstrap() {
       if (localPlayer) {
         localPlayer.destroy();
       }
-      localPlayer = new LocalPlayer(scene, camera, network, myId, groundColliders, wallColliders);
+      localPlayer = new LocalPlayer(scene, camera, network, myId, groundColliders, wallColliders, () => {
+        playerLoaded = true;
+        checkLoadingComplete();
+      });
 
       // Clear current peers if any, and add existing ones
       peers.forEach((p) => p.destroy());

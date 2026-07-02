@@ -1,7 +1,54 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
+let onMapLoadedCallback: (() => void) | null = null;
+export function setOnMapLoaded(cb: () => void) {
+  onMapLoadedCallback = cb;
+}
+
 export function createScene() {
+  // Bind loading manager callbacks to update the loading screen UI
+  const loadingProgress = document.getElementById('loading-progress');
+  const loadingStatus = document.getElementById('loading-status');
+  const loadingOverlay = document.getElementById('loading-overlay');
+
+  const manager = new THREE.LoadingManager();
+
+  manager.onProgress = (url, itemsLoaded, itemsTotal) => {
+    const percentage = Math.round((itemsLoaded / itemsTotal) * 100);
+    if (loadingProgress) {
+      loadingProgress.style.width = `${percentage}%`;
+    }
+    if (loadingStatus) {
+      loadingStatus.textContent = `CONNECTING... (${percentage}%)`;
+    }
+  };
+
+  manager.onLoad = () => {
+    if (loadingProgress) {
+      loadingProgress.style.width = '100%';
+    }
+    if (onMapLoadedCallback) {
+      onMapLoadedCallback();
+    } else {
+      if (loadingStatus) {
+        loadingStatus.textContent = 'CONNECTED';
+      }
+      setTimeout(() => {
+        if (loadingOverlay) {
+          loadingOverlay.classList.add('hidden');
+        }
+      }, 500);
+    }
+  };
+
+  manager.onError = (url) => {
+    console.error('Error loading resource:', url);
+    if (loadingStatus) {
+      loadingStatus.textContent = 'ERROR LOADING DATA';
+    }
+  };
+
   const scene = new THREE.Scene();
   // Dark atmospheric space-black night sky
   scene.background = new THREE.Color(0x0a0a1a);
@@ -10,7 +57,7 @@ export function createScene() {
   // Skydome background using background.png (with fog disabled so it remains fully visible)
   const skyGeo = new THREE.SphereGeometry(500, 60, 40);
   skyGeo.scale(-1, 1, 1);
-  const skyTex = new THREE.TextureLoader().load('/background.png');
+  const skyTex = new THREE.TextureLoader(manager).load('/background.png');
   const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, fog: false });
   const skydome = new THREE.Mesh(skyGeo, skyMat);
   scene.add(skydome);
@@ -70,7 +117,7 @@ export function createScene() {
 
   // Load the 3D Map
   console.log('Loading map_001.glb...');
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader(manager);
   loader.load(
     '/map_001.glb',
     (gltf) => {
@@ -80,8 +127,11 @@ export function createScene() {
       mapModel.updateMatrixWorld(true);
 
       // Enable shadow and collect meshes for collider detection
+      const mapUniqueNames = new Set<string>();
       mapModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
+          const prefix = child.name.split(/[0-9_\-\s]/)[0] || child.name;
+          mapUniqueNames.add(prefix);
           child.castShadow = true;
           child.receiveShadow = true;
 
@@ -101,6 +151,7 @@ export function createScene() {
 
       scene.add(mapModel);
       console.log(`map_001.glb loaded successfully. Ground: ${groundColliders.length} meshes, Wall: ${wallColliders.length} meshes`);
+      console.log('map_001.glb Unique Mesh Name Prefixes:', JSON.stringify(Array.from(mapUniqueNames)));
     },
     (xhr) => {
       if (xhr.total > 0) {
@@ -117,16 +168,19 @@ export function createScene() {
     '/prop.glb',
     (gltf) => {
       const propModel = gltf.scene;
-      
+
       // Force matrix world update so geometry world coordinates are accurate
       propModel.updateMatrixWorld(true);
 
       // Enable shadow and collect all meshes in prop.glb for wall collision
+      const propUniqueNames = new Set<string>();
       propModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
+          const prefix = child.name.split(/[0-9_\-\s]/)[0] || child.name;
+          propUniqueNames.add(prefix);
           child.castShadow = true;
           child.receiveShadow = true;
-          
+
           // Calculate precise bounding box in world coordinates for collision
           child.geometry.computeBoundingBox();
           if (child.geometry.boundingBox) {
@@ -135,9 +189,10 @@ export function createScene() {
           }
         }
       });
-      
+
       scene.add(propModel);
       console.log(`prop.glb loaded successfully. Wall meshes added to colliders.`);
+      console.log('prop.glb Unique Mesh Name Prefixes:', JSON.stringify(Array.from(propUniqueNames)));
     },
     (xhr) => {
       if (xhr.total > 0) {
