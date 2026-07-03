@@ -52,6 +52,48 @@ async function bootstrap() {
   const pixelSize = Math.max(4, Math.round(2.5 * window.devicePixelRatio));
   const renderPixelatedPass = new RenderPixelatedPass(pixelSize, scene, camera);
   renderPixelatedPass.depthEdgeStrength = 2;
+  renderPixelatedPass.normalEdgeStrength = 0.5;
+
+  // Override render to exclude trees (Layer 0) from the normal edge outlines (Layer 1 only)
+  renderPixelatedPass.render = function (this: any, renderer: any, writeBuffer: any) {
+    const uniforms = this.fsQuad.material.uniforms;
+    uniforms.normalEdgeStrength.value = this.normalEdgeStrength;
+    uniforms.depthEdgeStrength.value = this.depthEdgeStrength;
+
+    // Save camera layer mask
+    const originalMask = this.camera.layers.mask;
+
+    // 1. Beauty pass: Render all objects (Layer 0 & 1)
+    this.camera.layers.enable(0);
+    this.camera.layers.enable(1);
+    renderer.setRenderTarget(this.beautyRenderTarget);
+    renderer.render(this.scene, this.camera);
+
+    // 2. Normal pass: Render only Layer 1 (excludes trees on Layer 0)
+    this.camera.layers.set(1);
+    const overrideMaterial_old = this.scene.overrideMaterial;
+    renderer.setRenderTarget(this.normalRenderTarget);
+    this.scene.overrideMaterial = this.normalMaterial;
+    renderer.render(this.scene, this.camera);
+    this.scene.overrideMaterial = overrideMaterial_old;
+
+    // Restore camera layers
+    this.camera.layers.mask = originalMask;
+
+    uniforms.tDiffuse.value = this.beautyRenderTarget.texture;
+    uniforms.tDepth.value = this.beautyRenderTarget.depthTexture;
+    uniforms.tNormal.value = this.normalRenderTarget.texture;
+
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (this.clear) renderer.clear();
+    }
+
+    this.fsQuad.render(renderer);
+  };
+
   composer.addPass(renderPixelatedPass);
 
   // Final color grading / sRGB gamma / tone mapping pass

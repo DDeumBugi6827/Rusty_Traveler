@@ -163,6 +163,7 @@ export class LocalPlayer {
           if (node instanceof THREE.Mesh) {
             node.castShadow = true;
             node.receiveShadow = true;
+            node.layers.enable(1);
           }
         });
 
@@ -701,6 +702,7 @@ export class PeerPlayer {
           if (node instanceof THREE.Mesh) {
             node.castShadow = true;
             node.receiveShadow = true;
+            node.layers.enable(1);
           }
         });
 

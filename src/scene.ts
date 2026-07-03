@@ -69,30 +69,29 @@ export function createScene() {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, precision: 'highp' });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.0;
 
   const appContainer = document.getElementById('app');
   if (appContainer) {
     appContainer.appendChild(renderer.domElement);
   }
 
-  // Post-apocalyptic dark atmospheric lighting (adjusted for flashlight exploration visibility)
   // Low-intensity deep purple ambient light to tint the dark shadows (adjusted to 0.2)
-  const ambientLight = new THREE.AmbientLight(0x2c204d, 0.5);
+  const ambientLight = new THREE.AmbientLight(0x2c204d, 0.40);
   scene.add(ambientLight);
 
   // Hemisphere light representing ambient reflection from purple sky to ground (adjusted to 0.2)
-  const hemiLight = new THREE.HemisphereLight(0x4a3675, 0x18122b, 0.5);
+  const hemiLight = new THREE.HemisphereLight(0x4a3675, 0x18122b, 0.40);
   hemiLight.position.set(0, 50, 0);
   scene.add(hemiLight);
 
   // Soft sunset directional light to show shapes in the distance (adjusted to 0.4)
-  const dirLight = new THREE.DirectionalLight(0xff9e2c, 0.4);
+  const dirLight = new THREE.DirectionalLight(0xff9e2c, 0.3);
   //원래 dirLight.position.set(50, 60, 40);
   //dirLight.position.set(0, 60, 0);
   dirLight.castShadow = true;
@@ -107,7 +106,7 @@ export function createScene() {
   scene.add(dirLight);
 
   // Secondary soft cyan rim light for subtle neon outlines (adjusted to 0.3)
-  const rimLight = new THREE.DirectionalLight(0x00ffff, 0.3);
+  const rimLight = new THREE.DirectionalLight(0x00ffff, 0.25);
   rimLight.position.set(-50, 20, -40);
   scene.add(rimLight);
 
@@ -134,6 +133,39 @@ export function createScene() {
           mapUniqueNames.add(prefix);
           child.castShadow = true;
           child.receiveShadow = true;
+
+          const isTree = prefix.toLowerCase() === 'tree' || prefix.toLowerCase() === 'darktree';
+          if (!isTree) {
+            child.layers.enable(1);
+          }
+
+          // Adjust tree materials to MeshBasicMaterial (unlit) for consistent styling
+          if (isTree) {
+            if (child.material) {
+              const convertToBasicMaterial = (mat: THREE.Material): THREE.MeshBasicMaterial => {
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
+                return new THREE.MeshBasicMaterial({
+                  map: map,
+                  color: (mat as any).color || new THREE.Color(0xffffff),
+                  transparent: true,
+                  alphaTest: 0.5,
+                  depthWrite: true,
+                  side: mat.side
+                });
+              };
+
+              if (Array.isArray(child.material)) {
+                child.material = child.material.map(convertToBasicMaterial);
+              } else {
+                child.material = convertToBasicMaterial(child.material);
+              }
+            }
+          }
 
           const nameLower = child.name.toLowerCase();
           if (nameLower.includes('ground')) {
@@ -181,6 +213,39 @@ export function createScene() {
           child.castShadow = true;
           child.receiveShadow = true;
 
+          const isTree = prefix.toLowerCase() === 'tree' || prefix.toLowerCase() === 'darktree';
+          if (!isTree) {
+            child.layers.enable(1);
+          }
+
+          // Adjust tree materials to MeshBasicMaterial (unlit) for consistent styling
+          if (isTree) {
+            if (child.material) {
+              const convertToBasicMaterial = (mat: THREE.Material): THREE.MeshBasicMaterial => {
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
+                return new THREE.MeshBasicMaterial({
+                  map: map,
+                  color: (mat as any).color || new THREE.Color(0xffffff),
+                  transparent: true,
+                  alphaTest: 0.5,
+                  depthWrite: true,
+                  side: mat.side
+                });
+              };
+
+              if (Array.isArray(child.material)) {
+                child.material = child.material.map(convertToBasicMaterial);
+              } else {
+                child.material = convertToBasicMaterial(child.material);
+              }
+            }
+          }
+
           // Calculate precise bounding box in world coordinates for collision
           child.geometry.computeBoundingBox();
           if (child.geometry.boundingBox) {
@@ -211,6 +276,7 @@ export function createScene() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
   });
 
   return { scene, renderer, camera, groundColliders, wallColliders };
