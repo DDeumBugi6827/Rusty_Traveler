@@ -55,7 +55,10 @@ async function bootstrap() {
 
   // Pixel post-processing shader setup (Pixel size scaled by devicePixelRatio for consistent retro chunkiness on mobile)
   const composer = new EffectComposer(renderer);
-  const pixelSize = Math.max(4, Math.round(2.5 * window.devicePixelRatio));
+  const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  // Increase pixel base scale on mobile to make pixels chunkier/larger (3.8 on mobile, 2.5 on desktop)
+  const basePixelScale = isMobile ? 3.8 : 2.5;
+  const pixelSize = Math.max(isMobile ? 6 : 4, Math.round(basePixelScale * window.devicePixelRatio));
   const renderPixelatedPass = new RenderPixelatedPass(pixelSize, scene, camera);
   renderPixelatedPass.depthEdgeStrength = 2;
   renderPixelatedPass.normalEdgeStrength = 0.5;
@@ -225,7 +228,9 @@ async function bootstrap() {
     requestAnimationFrame(animate);
 
     const deltaTime = clock.getDelta();
-    sandstorm.update(camera.position, deltaTime);
+    // Track the local player's group for position & orientation, fallback to camera
+    const trackingTarget = localPlayer ? localPlayer.group : camera;
+    sandstorm.update(trackingTarget, deltaTime);
 
     // Update local player
     if (localPlayer) {

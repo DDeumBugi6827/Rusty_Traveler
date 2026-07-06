@@ -42,9 +42,9 @@ export class SandstormParticles {
     // Much smaller size and slightly higher opacity for dust/sand texture
     const material = new THREE.PointsMaterial({
       color: 0xe5c189,       // Sandy/desert color
-      size: 0.05,            // Significantly smaller particles for realistic sand dust
+      size: 0.025,           // Reduced from 0.05 to make particles extremely fine
       transparent: true,
-      opacity: 0.55,         // Higher opacity for visibility since they are tiny
+      opacity: 0.65,         // Slightly increased opacity to ensure visibility of tiny dots
       depthWrite: false,
       sizeAttenuation: true
     });
@@ -54,11 +54,13 @@ export class SandstormParticles {
   }
 
   /**
-   * Updates particle positions locally and snaps the system container to the target position (player/camera).
+   * Updates particle positions locally and snaps the system container to the target position (player/camera)
+   * copying both position and rotation (X, Y, Z axes) so that wind flows relative to the target's orientation.
    */
-  public update(targetPos: THREE.Vector3, deltaTime: number) {
-    // Smoothly snap the entire particle group's world position to follow the player/camera
-    this.points.position.copy(targetPos);
+  public update(targetObj: THREE.Object3D, deltaTime: number) {
+    // Snap both position and rotation to follow the target's coordinate system
+    this.points.position.copy(targetObj.position);
+    this.points.quaternion.copy(targetObj.quaternion);
 
     const positionAttribute = this.geometry.getAttribute('position') as THREE.BufferAttribute;
     const positions = positionAttribute.array as Float32Array;
