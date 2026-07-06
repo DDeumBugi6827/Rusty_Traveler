@@ -5,6 +5,8 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createNetwork, Position } from './network';
 import { LocalPlayer, PeerPlayer } from './player';
 import { GameUI } from './ui';
+import { SandstormParticles } from './particles';
+import * as THREE from 'three';
 
 async function bootstrap() {
   let mapLoaded = false;
@@ -46,6 +48,10 @@ async function bootstrap() {
 
   // 1. Scene setup
   const { scene, renderer, camera, groundColliders, wallColliders } = createScene();
+
+  // Create Sandstorm Particles tracking the camera
+  const sandstorm = new SandstormParticles(scene);
+  const clock = new THREE.Clock();
 
   // Pixel post-processing shader setup (Pixel size scaled by devicePixelRatio for consistent retro chunkiness on mobile)
   const composer = new EffectComposer(renderer);
@@ -217,6 +223,9 @@ async function bootstrap() {
   // 5. Game Loop
   function animate() {
     requestAnimationFrame(animate);
+
+    const deltaTime = clock.getDelta();
+    sandstorm.update(camera.position, deltaTime);
 
     // Update local player
     if (localPlayer) {

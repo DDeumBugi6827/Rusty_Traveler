@@ -81,12 +81,12 @@ export function createScene() {
     appContainer.appendChild(renderer.domElement);
   }
 
-  // Low-intensity deep purple ambient light to tint the dark shadows (adjusted to 0.2)
-  const ambientLight = new THREE.AmbientLight(0x2c204d, 0.40);
+  // Low-intensity deep purple ambient light to tint the dark shadows (Brightened for lower hemisphere visibility)
+  const ambientLight = new THREE.AmbientLight(0x4a3b75, 0.60);
   scene.add(ambientLight);
 
-  // Hemisphere light representing ambient reflection from purple sky to ground (adjusted to 0.2)
-  const hemiLight = new THREE.HemisphereLight(0x4a3675, 0x18122b, 0.40);
+  // Hemisphere light representing ambient reflection from purple sky to ground (Brightened ground color)
+  const hemiLight = new THREE.HemisphereLight(0x4a3675, 0x2e204a, 0.50);
   hemiLight.position.set(0, 50, 0);
   scene.add(hemiLight);
 
@@ -109,6 +109,11 @@ export function createScene() {
   const rimLight = new THREE.DirectionalLight(0x00ffff, 0.25);
   rimLight.position.set(-50, 20, -40);
   scene.add(rimLight);
+
+  // Bottom fill light to illuminate the lower hemisphere of the spherical planet map (Significantly brightened)
+  const bottomLight = new THREE.DirectionalLight(0x765fcc, 0.65);
+  bottomLight.position.set(0, -60, 0);
+  scene.add(bottomLight);
 
   // Colliders for terrain height and wall collision
   const groundColliders: THREE.Object3D[] = [];
