@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+// Add BVH extension methods to Three.js prototypes
+(THREE.BufferGeometry.prototype as any).computeBoundsTree = computeBoundsTree;
+(THREE.BufferGeometry.prototype as any).disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let onMapLoadedCallback: (() => void) | null = null;
 export function setOnMapLoaded(cb: () => void) {
@@ -117,20 +123,17 @@ export function createScene() {
 
   // Colliders for terrain height and wall collision
   const groundColliders: THREE.Object3D[] = [];
-  const wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[] = [];
+  const wallColliders: THREE.Mesh[] = [];
 
-  // Load the 3D Map
+  // Load the 3D Map (map_001.glb)
   console.log('Loading map_001.glb...');
   const loader = new GLTFLoader(manager);
   loader.load(
     '/map_001.glb',
     (gltf) => {
       const mapModel = gltf.scene;
-
-      // Force matrix world update so geometry world coordinates are accurate
       mapModel.updateMatrixWorld(true);
 
-      // Enable shadow and collect meshes for collider detection
       const mapUniqueNames = new Set<string>();
       mapModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
@@ -174,20 +177,15 @@ export function createScene() {
 
           const nameLower = child.name.toLowerCase();
           if (nameLower.includes('ground')) {
+            // Compute BVH bounds tree for fast raycasting and ground locking
+            (child.geometry as any).computeBoundsTree();
             groundColliders.push(child);
-          } else if (nameLower.includes('wall')) {
-            // Compute precise bounding box in world coordinates
-            child.geometry.computeBoundingBox();
-            if (child.geometry.boundingBox) {
-              const box = new THREE.Box3().copy(child.geometry.boundingBox).applyMatrix4(child.matrixWorld);
-              wallColliders.push({ mesh: child, box });
-            }
           }
         }
       });
 
       scene.add(mapModel);
-      console.log(`map_001.glb loaded successfully. Ground: ${groundColliders.length} meshes, Wall: ${wallColliders.length} meshes`);
+      console.log(`map_001.glb loaded successfully. Ground: ${groundColliders.length} meshes`);
       console.log('map_001.glb Unique Mesh Name Prefixes:', JSON.stringify(Array.from(mapUniqueNames)));
     },
     (xhr) => {
@@ -197,6 +195,40 @@ export function createScene() {
     },
     (error) => {
       console.error('Error loading map_001.glb:', error);
+    }
+  );
+
+  // Load the Collision Mesh (collision_mesh.glb) for wall collision (invisible)
+  console.log('Loading collision_mesh.glb...');
+  loader.load(
+    '/collision_mesh.glb',
+    (gltf) => {
+      const collisionModel = gltf.scene;
+      collisionModel.updateMatrixWorld(true);
+
+      collisionModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // Hide visual representation
+          child.visible = false;
+
+          // Compute BVH bounds tree
+          (child.geometry as any).computeBoundsTree();
+
+          // Push directly to wallColliders (which is now THREE.Mesh[])
+          wallColliders.push(child);
+        }
+      });
+
+      scene.add(collisionModel);
+      console.log(`collision_mesh.glb loaded successfully. Wall colliders: ${wallColliders.length}`);
+    },
+    (xhr) => {
+      if (xhr.total > 0) {
+        console.log(`Collision mesh loading progress: ${(xhr.loaded / xhr.total * 100).toFixed(2)}%`);
+      }
+    },
+    (error) => {
+      console.error('Error loading collision_mesh.glb:', error);
     }
   );
   // Load the Props (Rocks, Pipes, etc.)
@@ -251,17 +283,19 @@ export function createScene() {
             }
           }
 
-          // Calculate precise bounding box in world coordinates for collision
+          // Collision calculations for prop.glb are disabled per user request (will use dedicated collision mesh GLB later)
+          /*
           child.geometry.computeBoundingBox();
           if (child.geometry.boundingBox) {
             const box = new THREE.Box3().copy(child.geometry.boundingBox).applyMatrix4(child.matrixWorld);
             wallColliders.push({ mesh: child, box });
           }
+          */
         }
       });
 
       scene.add(propModel);
-      console.log(`prop.glb loaded successfully. Wall meshes added to colliders.`);
+      console.log(`prop.glb loaded successfully. (Colliders skipped as requested)`);
       console.log('prop.glb Unique Mesh Name Prefixes:', JSON.stringify(Array.from(propUniqueNames)));
     },
     (xhr) => {

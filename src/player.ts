@@ -67,7 +67,7 @@ export class LocalPlayer {
 
   private yawAngle = 0;
   private groundColliders: THREE.Object3D[];
-  private wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[];
+  private wallColliders: THREE.Mesh[];
   private raycaster = new THREE.Raycaster();
   private groundNormal = new THREE.Vector3(0, 1, 0);
   private targetNormal = new THREE.Vector3(0, 1, 0);
@@ -91,7 +91,7 @@ export class LocalPlayer {
     network: WebSocketNetwork,
     id: string,
     groundColliders: THREE.Object3D[],
-    wallColliders: { mesh: THREE.Mesh; box: THREE.Box3 }[],
+    wallColliders: THREE.Mesh[],
     onModelLoaded?: () => void
   ) {
     this.scene = scene;
@@ -363,14 +363,13 @@ export class LocalPlayer {
       const rayOrigin = this.group.position.clone().addScaledVector(localUp, playerHeight * 0.5);
       const rayDir = moveVec.clone().normalize();
 
-      // Collect all wall meshes for raycasting
-      const wallMeshes = this.wallColliders.map(w => w.mesh);
-
+      // Configure raycaster for BVH-accelerated first hit only search
+      (this.raycaster as any).firstHitOnly = true;
       this.raycaster.set(rayOrigin, rayDir);
       // Limit far distance to playerRadius + step size
       this.raycaster.far = playerRadius + Math.abs(step);
       
-      const intersects = this.raycaster.intersectObjects(wallMeshes, true);
+      const intersects = this.raycaster.intersectObjects(this.wallColliders, true);
 
       if (intersects.length > 0) {
         const hit = intersects[0];
@@ -389,7 +388,7 @@ export class LocalPlayer {
               this.raycaster.set(rayOrigin, slideRayDir);
               this.raycaster.far = playerRadius;
               
-              const slideIntersects = this.raycaster.intersectObjects(wallMeshes, true);
+              const slideIntersects = this.raycaster.intersectObjects(this.wallColliders, true);
               if (slideIntersects.length === 0) {
                 // Safe to slide!
                 this.group.position.add(slideVec);
@@ -404,6 +403,7 @@ export class LocalPlayer {
         }
       }
       this.raycaster.far = Infinity; // Reset raycaster.far
+      (this.raycaster as any).firstHitOnly = false; // Reset firstHitOnly
     }
 
     if (canMove) {
