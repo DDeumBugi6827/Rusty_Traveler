@@ -63,6 +63,14 @@ async function bootstrap() {
   renderPixelatedPass.depthEdgeStrength = 2;
   renderPixelatedPass.normalEdgeStrength = 0.5;
 
+  // ⭐ [비침 해결 핵심 코드] 
+  if ((renderPixelatedPass as any).normalMaterial) {
+    const normMat = (renderPixelatedPass as any).normalMaterial;
+    normMat.depthWrite = true;       // 앞면이 뒷면을 무조건 가리도록 고정
+    normMat.depthTest = true;        // 깊이 테스트 활성화
+    normMat.blending = THREE.NoBlending; // 반사/반투명으로 인한 블렌딩 간섭 차단
+  }
+
   // Override render to exclude trees (Layer 0) from the normal edge outlines (Layer 1 only)
   renderPixelatedPass.render = function (this: any, renderer: any, writeBuffer: any) {
     const uniforms = this.fsQuad.material.uniforms;

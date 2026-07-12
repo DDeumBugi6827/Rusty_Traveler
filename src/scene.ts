@@ -73,9 +73,9 @@ export function createScene() {
   // Start at a default position for a flat world
   camera.position.set(0, 15, 20);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, precision: 'highp' });
+  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, precision: 'mediump' });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -160,7 +160,7 @@ export function createScene() {
                 return new THREE.MeshBasicMaterial({
                   map: map,
                   color: (mat as any).color || new THREE.Color(0xffffff),
-                  transparent: true,
+                  transparent: false,
                   alphaTest: 0.5,
                   depthWrite: true,
                   side: mat.side
@@ -172,6 +172,24 @@ export function createScene() {
               } else {
                 child.material = convertToBasicMaterial(child.material);
               }
+            }
+          } else if (child.material) {
+            const adjustTransparentMaterial = (mat: THREE.Material) => {
+              if (mat) {
+                if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
+                  mat.depthWrite = true;
+                  mat.depthTest = true;
+                  (mat as any).transparent = false;
+                  if ((mat as any).alphaTest === 0) {
+                    (mat as any).alphaTest = 0.5;
+                  }
+                }
+              }
+            };
+            if (Array.isArray(child.material)) {
+              child.material.forEach(adjustTransparentMaterial);
+            } else {
+              adjustTransparentMaterial(child.material);
             }
           }
 
@@ -241,61 +259,140 @@ export function createScene() {
       // Force matrix world update so geometry world coordinates are accurate
       propModel.updateMatrixWorld(true);
 
-      // Enable shadow and collect all meshes in prop.glb for wall collision
       const propUniqueNames = new Set<string>();
+
+      // Cache converted materials to reuse them and keep groupings consistent
+      const materialCache = new Map<THREE.Material, THREE.Material>();
+      const convertToBasicMaterial = (mat: THREE.Material): THREE.Material => {
+        if (materialCache.has(mat)) {
+          return materialCache.get(mat)!;
+        }
+        const map = (mat as any).map;
+        if (map) {
+          map.magFilter = THREE.NearestFilter;
+          map.minFilter = THREE.NearestFilter;
+          map.needsUpdate = true;
+        }
+        const newMat = new THREE.MeshBasicMaterial({
+          map: map,
+          color: (mat as any).color || new THREE.Color(0xffffff),
+          transparent: false,
+          alphaTest: 0.5,
+          depthWrite: true,
+          side: mat.side
+        });
+        materialCache.set(mat, newMat);
+        return newMat;
+      };
+
+      // Define grouping interface
+      interface InstancedGroup {
+        geometry: THREE.BufferGeometry;
+        material: THREE.Material | THREE.Material[];
+        isTree: boolean;
+        matrices: THREE.Matrix4[];
+      }
+
+      const groups = new Map<string, InstancedGroup>();
+
       propModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           const prefix = child.name.split(/[0-9_\-\s]/)[0] || child.name;
           propUniqueNames.add(prefix);
-          child.castShadow = true;
-          child.receiveShadow = true;
 
           const isTree = prefix.toLowerCase() === 'tree' || prefix.toLowerCase() === 'darktree';
-          if (!isTree) {
-            child.layers.enable(1);
-          }
 
-          // Adjust tree materials to MeshBasicMaterial (unlit) for consistent styling
-          if (isTree) {
-            if (child.material) {
-              const convertToBasicMaterial = (mat: THREE.Material): THREE.MeshBasicMaterial => {
-                const map = (mat as any).map;
-                if (map) {
-                  map.magFilter = THREE.NearestFilter;
-                  map.minFilter = THREE.NearestFilter;
-                  map.needsUpdate = true;
+          let finalMaterial: THREE.Material | THREE.Material[] = child.material;
+          if (isTree && child.material) {
+            if (Array.isArray(child.material)) {
+              finalMaterial = child.material.map(convertToBasicMaterial);
+            } else {
+              finalMaterial = convertToBasicMaterial(child.material);
+            }
+          } else if (child.material) {
+            const adjustTransparentMaterial = (mat: THREE.Material) => {
+              if (mat) {
+                if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
+                  mat.depthWrite = true;
+                  mat.depthTest = true;
+                  (mat as any).transparent = false;
+                  if ((mat as any).alphaTest === 0) {
+                    (mat as any).alphaTest = 0.5;
+                  }
                 }
-                return new THREE.MeshBasicMaterial({
-                  map: map,
-                  color: (mat as any).color || new THREE.Color(0xffffff),
-                  transparent: true,
-                  alphaTest: 0.5,
-                  depthWrite: true,
-                  side: mat.side
-                });
-              };
-
-              if (Array.isArray(child.material)) {
-                child.material = child.material.map(convertToBasicMaterial);
-              } else {
-                child.material = convertToBasicMaterial(child.material);
               }
+            };
+            if (Array.isArray(child.material)) {
+              child.material.forEach(adjustTransparentMaterial);
+            } else {
+              adjustTransparentMaterial(child.material);
             }
           }
 
-          // Collision calculations for prop.glb are disabled per user request (will use dedicated collision mesh GLB later)
-          /*
-          child.geometry.computeBoundingBox();
-          if (child.geometry.boundingBox) {
-            const box = new THREE.Box3().copy(child.geometry.boundingBox).applyMatrix4(child.matrixWorld);
-            wallColliders.push({ mesh: child, box });
+          // Generate key based on geometry UUID and material UUID(s)
+          const getMatKey = (mat: THREE.Material | THREE.Material[]): string => {
+            if (Array.isArray(mat)) {
+              return mat.map(m => m.uuid).join(',');
+            }
+            return mat ? mat.uuid : 'no-material';
+          };
+          const key = `${child.geometry.uuid}_${getMatKey(finalMaterial)}`;
+
+          let group = groups.get(key);
+          if (!group) {
+            group = {
+              geometry: child.geometry,
+              material: finalMaterial,
+              isTree: isTree,
+              matrices: []
+            };
+            groups.set(key, group);
           }
-          */
+
+          // Handle already instanced meshes (from EXT_mesh_gpu_instancing)
+          if ((child as any).isInstancedMesh) {
+            const instancedChild = child as THREE.InstancedMesh;
+            const tempMatrix = new THREE.Matrix4();
+            console.log(`[Instancing] Found InstancedMesh child "${child.name}" with ${instancedChild.count} instances.`);
+            for (let i = 0; i < instancedChild.count; i++) {
+              instancedChild.getMatrixAt(i, tempMatrix);
+              // Multiply by child's matrixWorld to put instances in the absolute world coordinates
+              const worldMatrix = tempMatrix.clone().premultiply(child.matrixWorld);
+              group.matrices.push(worldMatrix);
+            }
+          } else {
+            group.matrices.push(child.matrixWorld.clone());
+          }
         }
       });
 
-      scene.add(propModel);
-      console.log(`prop.glb loaded successfully. (Colliders skipped as requested)`);
+      // Instantiate InstancedMesh for each group and add to the scene
+      groups.forEach((group) => {
+        const instancedMesh = new THREE.InstancedMesh(
+          group.geometry,
+          group.material as any,
+          group.matrices.length
+        );
+
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+
+        for (let i = 0; i < group.matrices.length; i++) {
+          instancedMesh.setMatrixAt(i, group.matrices[i]);
+        }
+
+        // Upload instance matrices to GPU
+        instancedMesh.instanceMatrix.needsUpdate = true;
+
+        // Maintain layer 1 configuration for outline shader/effect if not tree
+        if (!group.isTree) {
+          instancedMesh.layers.enable(1);
+        }
+
+        scene.add(instancedMesh);
+      });
+
+      console.log(`prop.glb loaded and instanced successfully. Total groups: ${groups.size}`);
       console.log('prop.glb Unique Mesh Name Prefixes:', JSON.stringify(Array.from(propUniqueNames)));
     },
     (xhr) => {
@@ -315,7 +412,7 @@ export function createScene() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   });
 
   return { scene, renderer, camera, groundColliders, wallColliders };
