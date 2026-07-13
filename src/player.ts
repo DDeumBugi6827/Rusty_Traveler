@@ -368,7 +368,7 @@ export class LocalPlayer {
       this.raycaster.set(rayOrigin, rayDir);
       // Limit far distance to playerRadius + step size
       this.raycaster.far = playerRadius + Math.abs(step);
-      
+
       const intersects = this.raycaster.intersectObjects(this.wallColliders, true);
 
       if (intersects.length > 0) {
@@ -387,7 +387,7 @@ export class LocalPlayer {
               const slideRayDir = slideVec.clone().normalize();
               this.raycaster.set(rayOrigin, slideRayDir);
               this.raycaster.far = playerRadius;
-              
+
               const slideIntersects = this.raycaster.intersectObjects(this.wallColliders, true);
               if (slideIntersects.length === 0) {
                 // Safe to slide!
@@ -419,7 +419,7 @@ export class LocalPlayer {
 
       this.raycaster.set(rayOrigin, rayDirection);
       const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
-      
+
       let groundHit: THREE.Intersection | null = null;
       let groundNormal = new THREE.Vector3();
 
@@ -427,7 +427,7 @@ export class LocalPlayer {
         if (hit.face && hit.object) {
           const worldNormal = hit.face.normal.clone();
           worldNormal.transformDirection(hit.object.matrixWorld);
-          
+
           // Check if this face is flat enough to be ground relative to our current normal
           const dot = worldNormal.dot(localUp);
           if (dot >= 0.707) { // Slope angle <= 45 degrees
@@ -803,7 +803,7 @@ export class PeerPlayer {
 
       this.raycaster.set(rayOrigin, rayDirection);
       const intersects = this.raycaster.intersectObjects(this.groundColliders, true);
-      
+
       let groundHit: THREE.Intersection | null = null;
       let groundNormal = new THREE.Vector3();
 
@@ -811,7 +811,7 @@ export class PeerPlayer {
         if (hit.face && hit.object) {
           const worldNormal = hit.face.normal.clone();
           worldNormal.transformDirection(hit.object.matrixWorld);
-          
+
           // Check if this face is flat enough to be ground relative to our current normal
           const dot = worldNormal.dot(localUp);
           if (dot >= 0.707) { // Slope angle <= 45 degrees
@@ -834,7 +834,7 @@ export class PeerPlayer {
     // Calculate rotation towards movement direction on tangent plane
     const movement = this.group.position.clone().sub(prevPos);
     const isMoving = (movement.x * movement.x + movement.z * movement.z + movement.y * movement.y) > 0.0001;
-    
+
     const up = this.groundNormal.clone().normalize();
     let projectedForward: THREE.Vector3;
 
@@ -857,7 +857,7 @@ export class PeerPlayer {
     const right = new THREE.Vector3().crossVectors(up, projectedForward).normalize();
     const matrix = new THREE.Matrix4().makeBasis(right, up, projectedForward);
     const targetQuaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
-    
+
     if (isMoving) {
       this.group.quaternion.slerp(targetQuaternion, 0.15);
     } else {

@@ -98,8 +98,7 @@ export function createScene() {
 
   // Soft sunset directional light to show shapes in the distance (adjusted to 0.4)
   const dirLight = new THREE.DirectionalLight(0xff9e2c, 0.3);
-  //원래 dirLight.position.set(50, 60, 40);
-  //dirLight.position.set(0, 60, 0);
+  dirLight.position.set(50, 60, 40);
   dirLight.castShadow = true;
   dirLight.shadow.camera.top = 80;
   dirLight.shadow.camera.bottom = -80;
@@ -117,7 +116,7 @@ export function createScene() {
   scene.add(rimLight);
 
   // Bottom fill light to illuminate the lower hemisphere of the spherical planet map (Significantly brightened)
-  const bottomLight = new THREE.DirectionalLight(0x765fcc, 0.65);
+  const bottomLight = new THREE.DirectionalLight(0x4a3b75, 0.65);
   bottomLight.position.set(0, -60, 0);
   scene.add(bottomLight);
 
