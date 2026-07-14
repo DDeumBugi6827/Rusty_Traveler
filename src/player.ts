@@ -164,6 +164,22 @@ export class LocalPlayer {
             node.castShadow = true;
             node.receiveShadow = true;
             node.layers.enable(1);
+
+            const adjustMaterial = (mat: THREE.Material) => {
+              if (mat) {
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
+              }
+            };
+            if (Array.isArray(node.material)) {
+              node.material.forEach(adjustMaterial);
+            } else if (node.material) {
+              adjustMaterial(node.material);
+            }
           }
         });
 
@@ -703,6 +719,22 @@ export class PeerPlayer {
             node.castShadow = true;
             node.receiveShadow = true;
             node.layers.enable(1);
+
+            const adjustMaterial = (mat: THREE.Material) => {
+              if (mat) {
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
+              }
+            };
+            if (Array.isArray(node.material)) {
+              node.material.forEach(adjustMaterial);
+            } else if (node.material) {
+              adjustMaterial(node.material);
+            }
           }
         });
 

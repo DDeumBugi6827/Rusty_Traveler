@@ -10,7 +10,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
   <style>
     :root {
       --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -53,6 +54,8 @@
       display: block;
       width: 100%;
       height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
 
     /* Premium Glassmorphism UI Layout */
@@ -548,13 +551,31 @@
 
     /* CRT Flicker & Scanlines matching Lobby */
     @keyframes flicker {
-      0% { opacity: 0.95; }
-      5% { opacity: 0.98; }
-      10% { opacity: 0.93; }
-      15% { opacity: 1; }
-      20% { opacity: 0.95; }
-      100% { opacity: 0.97; }
+      0% {
+        opacity: 0.95;
+      }
+
+      5% {
+        opacity: 0.98;
+      }
+
+      10% {
+        opacity: 0.93;
+      }
+
+      15% {
+        opacity: 1;
+      }
+
+      20% {
+        opacity: 0.95;
+      }
+
+      100% {
+        opacity: 0.97;
+      }
     }
+
     .crt-flicker {
       animation: flicker 0.15s infinite;
     }
@@ -576,9 +597,15 @@
       z-index: 2;
       animation: scanline 8s linear infinite;
     }
+
     @keyframes scanline {
-      0% { top: 0; }
-      100% { top: 100%; }
+      0% {
+        top: 0;
+      }
+
+      100% {
+        top: 100%;
+      }
     }
 
     .loading-card-retro {
@@ -651,15 +678,15 @@
     <div id="loading-overlay" class="loading-overlay crt-flicker">
       <div class="grain-overlay-box"></div>
       <div class="scanline-box"></div>
-      
+
       <div class="loading-card-retro">
         <h2 class="loading-title-retro">RUSTY_TRAVELER</h2>
         <p class="loading-subtitle-retro">EVEN IF WE RUN INTO EACH OTHER BY CHANCE</p>
-        
+
         <div class="loading-progress-bar-retro">
           <div id="loading-progress" class="loading-progress-retro" style="width: 0%;"></div>
         </div>
-        
+
         <div id="loading-status" class="loading-status-retro">CONNECTING... (0%)</div>
       </div>
     </div>

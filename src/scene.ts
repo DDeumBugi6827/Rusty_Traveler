@@ -56,9 +56,9 @@ export function createScene() {
   };
 
   const scene = new THREE.Scene();
-  // Dark atmospheric space-black night sky
-  scene.background = new THREE.Color(0x0a0a1a);
-  scene.fog = new THREE.FogExp2(0x0a0a1a, 0.005);
+  // Warm atmospheric sunset/dust fog
+  scene.background = new THREE.Color(0x8c3f2d);
+  scene.fog = new THREE.FogExp2(0x8c3f2d, 0.006);
 
   // Skydome background using background.png (with fog disabled so it remains fully visible)
   const skyGeo = new THREE.SphereGeometry(500, 60, 40);
@@ -73,9 +73,14 @@ export function createScene() {
   // Start at a default position for a flat world
   camera.position.set(0, 15, 20);
 
+  const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const targetHeight = isMobile ? 240 : 240;
+  const initialAspect = window.innerWidth / window.innerHeight;
+  const initialWidth = Math.round(targetHeight * initialAspect);
+
   const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, precision: 'mediump' });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(initialWidth, targetHeight, false);
+  renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -87,17 +92,17 @@ export function createScene() {
     appContainer.appendChild(renderer.domElement);
   }
 
-  // Low-intensity deep purple ambient light to tint the dark shadows (Brightened for lower hemisphere visibility)
-  const ambientLight = new THREE.AmbientLight(0x4a3b75, 0.60);
+  //환경광 진보라빛 전역조명
+  const ambientLight = new THREE.AmbientLight(0x4a3b75, 1);
   scene.add(ambientLight);
 
   // Hemisphere light representing ambient reflection from purple sky to ground (Brightened ground color)
-  const hemiLight = new THREE.HemisphereLight(0x4a3675, 0x2e204a, 0.50);
+  const hemiLight = new THREE.HemisphereLight(0x280d4f, 0x280d4f, 0.90);
   hemiLight.position.set(0, 50, 0);
   scene.add(hemiLight);
 
   // Soft sunset directional light to show shapes in the distance (adjusted to 0.4)
-  const dirLight = new THREE.DirectionalLight(0xff9e2c, 0.3);
+  const dirLight = new THREE.DirectionalLight(0xff7e33, 0.80); // 따뜻한 우윳빛 주 조명
   dirLight.position.set(50, 60, 40);
   dirLight.castShadow = true;
   dirLight.shadow.camera.top = 80;
@@ -108,7 +113,10 @@ export function createScene() {
   dirLight.shadow.camera.far = 250;
   dirLight.shadow.mapSize.width = 2048; // High res shadow for toon shading
   dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.bias = -0.0005; // Prevent shadow acne depth fight
+  dirLight.shadow.normalBias = 0.03; // Shift shadow map sample coordinates slightly along normal to prevent self-shadowing on hills
   scene.add(dirLight);
+  scene.add(dirLight.target);
 
   // Secondary soft cyan rim light for subtle neon outlines (adjusted to 0.3)
   const rimLight = new THREE.DirectionalLight(0x00ffff, 0.25);
@@ -173,8 +181,15 @@ export function createScene() {
               }
             }
           } else if (child.material) {
-            const adjustTransparentMaterial = (mat: THREE.Material) => {
+            const adjustMaterial = (mat: THREE.Material) => {
               if (mat) {
+                // Nearest filtering for pixelated retro texture look
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
                 if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
                   mat.depthWrite = true;
                   mat.depthTest = true;
@@ -186,9 +201,9 @@ export function createScene() {
               }
             };
             if (Array.isArray(child.material)) {
-              child.material.forEach(adjustTransparentMaterial);
+              child.material.forEach(adjustMaterial);
             } else {
-              adjustTransparentMaterial(child.material);
+              adjustMaterial(child.material);
             }
           }
 
@@ -197,6 +212,27 @@ export function createScene() {
             // Compute BVH bounds tree for fast raycasting and ground locking
             (child.geometry as any).computeBoundsTree();
             groundColliders.push(child);
+
+            // Apply mipmapping and anisotropy to ground textures to fix shimmering
+            if (child.material) {
+              const adjustGroundMaterial = (mat: THREE.Material) => {
+                if (mat) {
+                  const map = (mat as any).map;
+                  if (map) {
+                    map.minFilter = THREE.NearestMipmapLinearFilter;
+                    map.magFilter = THREE.NearestFilter;
+                    map.generateMipmaps = true;
+                    map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    map.needsUpdate = true;
+                  }
+                }
+              };
+              if (Array.isArray(child.material)) {
+                child.material.forEach(adjustGroundMaterial);
+              } else {
+                adjustGroundMaterial(child.material);
+              }
+            }
           }
         }
       });
@@ -309,8 +345,14 @@ export function createScene() {
               finalMaterial = convertToBasicMaterial(child.material);
             }
           } else if (child.material) {
-            const adjustTransparentMaterial = (mat: THREE.Material) => {
+            const adjustMaterial = (mat: THREE.Material) => {
               if (mat) {
+                const map = (mat as any).map;
+                if (map) {
+                  map.magFilter = THREE.NearestFilter;
+                  map.minFilter = THREE.NearestFilter;
+                  map.needsUpdate = true;
+                }
                 if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
                   mat.depthWrite = true;
                   mat.depthTest = true;
@@ -322,9 +364,9 @@ export function createScene() {
               }
             };
             if (Array.isArray(child.material)) {
-              child.material.forEach(adjustTransparentMaterial);
+              child.material.forEach(adjustMaterial);
             } else {
-              adjustTransparentMaterial(child.material);
+              adjustMaterial(child.material);
             }
           }
 
@@ -408,11 +450,16 @@ export function createScene() {
 
   // Resize handler
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const targetHeight = isMobile ? 120 : 180;
+    const aspect = window.innerWidth / window.innerHeight;
+    const targetWidth = Math.round(targetHeight * aspect);
+
+    camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(targetWidth, targetHeight, false);
+    renderer.setPixelRatio(1);
   });
 
-  return { scene, renderer, camera, groundColliders, wallColliders };
+  return { scene, renderer, camera, groundColliders, wallColliders, dirLight };
 }

@@ -1,7 +1,5 @@
 import { createScene, setOnMapLoaded } from './scene';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+
 import { createNetwork, Position } from './network';
 import { LocalPlayer, PeerPlayer } from './player';
 import { GameUI } from './ui';
@@ -47,80 +45,11 @@ async function bootstrap() {
   }, 4000);
 
   // 1. Scene setup
-  const { scene, renderer, camera, groundColliders, wallColliders } = createScene();
+  const { scene, renderer, camera, groundColliders, wallColliders, dirLight } = createScene();
 
   // Create Sandstorm Particles tracking the camera
   const sandstorm = new SandstormParticles(scene);
   const clock = new THREE.Clock();
-
-  // Pixel post-processing shader setup (Pixel size scaled by devicePixelRatio for consistent retro chunkiness on mobile)
-  const composer = new EffectComposer(renderer);
-  const isMobile = window.innerWidth <= 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  // Increase pixel base scale on mobile to make pixels chunkier/larger (3.8 on mobile, 2.5 on desktop)
-  const basePixelScale = isMobile ? 3.8 : 2.5;
-  const pixelSize = Math.max(isMobile ? 6 : 4, Math.round(basePixelScale * window.devicePixelRatio));
-  const renderPixelatedPass = new RenderPixelatedPass(pixelSize, scene, camera);
-  renderPixelatedPass.depthEdgeStrength = 2;
-  renderPixelatedPass.normalEdgeStrength = 0.5;
-
-  // ⭐ [비침 해결 핵심 코드] 
-  if ((renderPixelatedPass as any).normalMaterial) {
-    const normMat = (renderPixelatedPass as any).normalMaterial;
-    normMat.depthWrite = true;       // 앞면이 뒷면을 무조건 가리도록 고정
-    normMat.depthTest = true;        // 깊이 테스트 활성화
-    normMat.blending = THREE.NoBlending; // 반사/반투명으로 인한 블렌딩 간섭 차단
-  }
-
-  // Override render to exclude trees (Layer 0) from the normal edge outlines (Layer 1 only)
-  renderPixelatedPass.render = function (this: any, renderer: any, writeBuffer: any) {
-    const uniforms = this.fsQuad.material.uniforms;
-    uniforms.normalEdgeStrength.value = this.normalEdgeStrength;
-    uniforms.depthEdgeStrength.value = this.depthEdgeStrength;
-
-    // Save camera layer mask
-    const originalMask = this.camera.layers.mask;
-
-    // 1. Beauty pass: Render all objects (Layer 0 & 1)
-    this.camera.layers.enable(0);
-    this.camera.layers.enable(1);
-    renderer.setRenderTarget(this.beautyRenderTarget);
-    renderer.render(this.scene, this.camera);
-
-    // 2. Normal pass: Render only Layer 1 (excludes trees on Layer 0)
-    this.camera.layers.set(1);
-    const overrideMaterial_old = this.scene.overrideMaterial;
-    renderer.setRenderTarget(this.normalRenderTarget);
-    this.scene.overrideMaterial = this.normalMaterial;
-    renderer.render(this.scene, this.camera);
-    this.scene.overrideMaterial = overrideMaterial_old;
-
-    // Restore camera layers
-    this.camera.layers.mask = originalMask;
-
-    uniforms.tDiffuse.value = this.beautyRenderTarget.texture;
-    uniforms.tDepth.value = this.beautyRenderTarget.depthTexture;
-    uniforms.tNormal.value = this.normalRenderTarget.texture;
-
-    if (this.renderToScreen) {
-      renderer.setRenderTarget(null);
-    } else {
-      renderer.setRenderTarget(writeBuffer);
-      if (this.clear) renderer.clear();
-    }
-
-    this.fsQuad.render(renderer);
-  };
-
-  composer.addPass(renderPixelatedPass);
-
-  // Final color grading / sRGB gamma / tone mapping pass
-  const outputPass = new OutputPass();
-  composer.addPass(outputPass);
-
-  // Resize composer along with window resizing
-  window.addEventListener('resize', () => {
-    composer.setSize(window.innerWidth, window.innerHeight);
-  });
 
   // 2. Network setup (Point to port 8080 on the same host)
   const serverUrl = `ws://${window.location.hostname}:8080`;
@@ -243,6 +172,20 @@ async function bootstrap() {
     // Update local player
     if (localPlayer) {
       localPlayer.update();
+
+      // Dynamically update directional light position to track player in spherical space
+      if (dirLight) {
+        const playerPos = localPlayer.group.position;
+        
+        // Maintain a constant sun direction vector in world space (50, 60, 40)
+        // This ensures the local angle of light and shadows changes dynamically as the player walks around the planet sphere
+        const sunDirection = new THREE.Vector3(50, 60, 40).normalize();
+        const distance = 120; // Keep the light source far enough to cover the shadow area
+        
+        // Position the light offset from the player along the constant world sun direction
+        dirLight.position.copy(playerPos).addScaledVector(sunDirection, distance);
+        dirLight.target.position.copy(playerPos);
+      }
     }
 
     // Update peer players (LERP positions)
@@ -250,8 +193,8 @@ async function bootstrap() {
       peer.update();
     });
 
-    // Render 3D Scene with pixel post-processing
-    composer.render();
+    // Render 3D Scene directly
+    renderer.render(scene, camera);
   }
 
   animate();

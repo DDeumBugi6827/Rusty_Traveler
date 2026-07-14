@@ -21,7 +21,7 @@ export class SandstormParticles {
   constructor(scene: THREE.Scene, particleCount: number = 4000) {
     this.particleCount = particleCount;
     this.geometry = new THREE.BufferGeometry();
-    
+
     this.positions = new Float32Array(particleCount * 3);
     this.velocities = new Float32Array(particleCount * 3);
 
@@ -39,10 +39,10 @@ export class SandstormParticles {
 
     this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
 
-    // Much smaller size and slightly higher opacity for dust/sand texture
+    // Slightly larger particle size for a pixelated retro dust look (Increased from 0.025 to 0.06)
     const material = new THREE.PointsMaterial({
       color: 0xe5c189,       // Sandy/desert color
-      size: 0.025,           // Reduced from 0.05 to make particles extremely fine
+      size: 0.3,
       transparent: true,
       opacity: 0.65,         // Slightly increased opacity to ensure visibility of tiny dots
       depthWrite: false,
@@ -86,7 +86,7 @@ export class SandstormParticles {
 
       // Since wind blows X+ and Z-, if they go too far right (X+) or far front (Z-),
       // we respawn them on the opposite local boundaries (X- or Z+) with randomized coordinates.
-      
+
       // Wrap X
       if (px > this.rangeX) {
         positions[idx] = -this.rangeX + (Math.random() * 5);

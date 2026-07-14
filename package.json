@@ -13,6 +13,9 @@
     "three-mesh-bvh": "^0.9.10"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
+    "@gltf-transform/functions": "^4.4.1",
     "@types/node": "^20.11.0",
     "@types/three": "^0.160.0",
     "typescript": "^5.3.3",
