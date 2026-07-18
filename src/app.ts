@@ -7,6 +7,59 @@ import { SandstormParticles } from './particles';
 import * as THREE from 'three';
 
 async function bootstrap() {
+  // Start loop BGM (handling browser autoplay policies)
+  const bgm = new Audio('/Unfinished_Corridor.mp3');
+  bgm.loop = true;
+  bgm.volume = 0.3; // Fallback default soft volume
+
+  let audioCtx: AudioContext | null = null;
+  let gainNode: GainNode | null = null;
+  let isConnected = false;
+
+  const startBGM = () => {
+    // Initialize Web Audio API on first interaction to bypass iOS volume/autoplay bugs
+    if (!isConnected) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+          gainNode = audioCtx.createGain();
+          gainNode.gain.setValueAtTime(1, audioCtx.currentTime); // Soft volume on both mobile and desktop
+
+          const source = audioCtx.createMediaElementSource(bgm);
+          source.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+
+          bgm.volume = 1.5; // Let GainNode handle the volume entirely
+          isConnected = true;
+        }
+      } catch (e) {
+        console.warn('Web Audio API failed to initialize:', e);
+      }
+    }
+
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch((err) => console.warn('Failed to resume AudioContext:', err));
+    }
+
+    bgm.play().then(() => {
+      // Once successfully playing, remove event listeners
+      document.removeEventListener('click', startBGM);
+      document.removeEventListener('keydown', startBGM);
+      document.removeEventListener('touchstart', startBGM);
+    }).catch((error) => {
+      console.warn('Autoplay blocked. Waiting for user interaction to play BGM:', error);
+    });
+  };
+
+  // Try to play immediately (might work if page navigation carried context)
+  startBGM();
+
+  // Fallback to play when user interacts
+  document.addEventListener('click', startBGM);
+  document.addEventListener('keydown', startBGM);
+  document.addEventListener('touchstart', startBGM);
+
   let mapLoaded = false;
   let playerLoaded = false;
   let loadingScreenHidden = false;
@@ -176,12 +229,12 @@ async function bootstrap() {
       // Dynamically update directional light position to track player in spherical space
       if (dirLight) {
         const playerPos = localPlayer.group.position;
-        
+
         // Maintain a constant sun direction vector in world space (50, 60, 40)
         // This ensures the local angle of light and shadows changes dynamically as the player walks around the planet sphere
         const sunDirection = new THREE.Vector3(50, 60, 40).normalize();
         const distance = 120; // Keep the light source far enough to cover the shadow area
-        
+
         // Position the light offset from the player along the constant world sun direction
         dirLight.position.copy(playerPos).addScaledVector(sunDirection, distance);
         dirLight.target.position.copy(playerPos);

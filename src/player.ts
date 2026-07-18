@@ -84,6 +84,11 @@ export class LocalPlayer {
   private idleAction: THREE.AnimationAction | null = null;
   private isDestroyed = false;
   private modelRotationY = 0; // Face forward (+Z)
+  private footstepAudioCtx: AudioContext | null = null;
+  private footstepGainNode: GainNode | null = null;
+  private footstepBuffer: AudioBuffer | null = null;
+  private playedLeftStep = false;
+  private playedRightStep = false;
 
   constructor(
     scene: THREE.Scene,
@@ -99,6 +104,43 @@ export class LocalPlayer {
     this.network = network;
     this.groundColliders = groundColliders;
     this.wallColliders = wallColliders;
+
+    // Initialize AudioContext & GainNode for footsteps (to bypass iOS volume read-only restrictions)
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        this.footstepAudioCtx = new AudioContextClass();
+        this.footstepGainNode = this.footstepAudioCtx.createGain();
+        this.footstepGainNode.gain.setValueAtTime(0.7, this.footstepAudioCtx.currentTime); // Standard step volume
+        this.footstepGainNode.connect(this.footstepAudioCtx.destination);
+      }
+    } catch (e) {
+      console.warn('Web Audio API not supported/blocked for footsteps:', e);
+    }
+
+    // Fetch and decode StepSound.mp3
+    if (this.footstepAudioCtx) {
+      fetch('/StepSound.mp3')
+        .then((response) => response.arrayBuffer())
+        .then((arrayBuffer) => this.footstepAudioCtx!.decodeAudioData(arrayBuffer))
+        .then((decodedBuffer) => {
+          this.footstepBuffer = decodedBuffer;
+        })
+        .catch((err) => console.error('Failed to load step sound buffer:', err));
+    }
+
+    const unlockSteps = () => {
+      if (this.footstepAudioCtx && this.footstepAudioCtx.state === 'suspended') {
+        this.footstepAudioCtx.resume().catch((err) => console.warn('Failed to resume footstep AudioContext:', err));
+      }
+      document.removeEventListener('click', unlockSteps);
+      document.removeEventListener('touchstart', unlockSteps);
+      document.removeEventListener('keydown', unlockSteps);
+    };
+
+    document.addEventListener('click', unlockSteps);
+    document.addEventListener('touchstart', unlockSteps);
+    document.addEventListener('keydown', unlockSteps);
 
     this.group = new THREE.Group();
     // Spawn at a default position initially
@@ -335,6 +377,21 @@ export class LocalPlayer {
     });
   }
 
+  private playFootstep() {
+    if (!this.footstepAudioCtx || !this.footstepBuffer || !this.footstepGainNode) return;
+    try {
+      const source = this.footstepAudioCtx.createBufferSource();
+      source.buffer = this.footstepBuffer;
+      source.connect(this.footstepGainNode);
+      source.onended = () => {
+        source.disconnect();
+      };
+      source.start(0);
+    } catch (e) {
+      console.warn('Failed to play step sound buffer:', e);
+    }
+  }
+
   public update() {
     const prevPos = this.group.position.clone();
     // 1. Rotation (Yaw): A/D or Left/Right arrows rotate the character around their local Y axis
@@ -558,6 +615,35 @@ export class LocalPlayer {
             this.idleAction.fadeOut(0.25);
           }
           this.walkAction.reset().fadeIn(0.25).play();
+          this.playedLeftStep = false;
+          this.playedRightStep = false;
+        }
+
+        // Footstep timing trigger (left foot: 9/24s, right foot: 20/24s)
+        if (this.walkAction && this.walkAction.isRunning()) {
+          const duration = this.walkAction.getClip().duration;
+          const currTime = this.walkAction.time % duration;
+
+          const leftStep = 9 / 24;
+          const rightStep = 20 / 24;
+
+          // Reset flags near the start of the walk cycle
+          if (currTime < leftStep) {
+            this.playedLeftStep = false;
+            this.playedRightStep = false;
+          }
+
+          // Trigger left step
+          if (currTime >= leftStep && currTime < rightStep && !this.playedLeftStep) {
+            this.playFootstep();
+            this.playedLeftStep = true;
+          }
+
+          // Trigger right step
+          if (currTime >= rightStep && !this.playedRightStep) {
+            this.playFootstep();
+            this.playedRightStep = true;
+          }
         }
       } else {
         if (this.idleAction && !this.idleAction.isRunning()) {
@@ -568,6 +654,8 @@ export class LocalPlayer {
         } else if (!this.idleAction && this.walkAction && this.walkAction.isRunning()) {
           this.walkAction.stop();
         }
+        this.playedLeftStep = false;
+        this.playedRightStep = false;
       }
     }
   }
