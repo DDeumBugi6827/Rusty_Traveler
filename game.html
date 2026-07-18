@@ -669,6 +669,31 @@
       text-transform: uppercase;
       text-shadow: 0 0 8px rgba(255, 181, 154, 0.3);
     }
+
+    .start-btn-retro {
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      font-size: 0.9rem;
+      letter-spacing: 0.25em;
+      color: #0b0f19;
+      background: #ffb59a;
+      border: 1px solid #ffb59a;
+      border-radius: 2px;
+      padding: 12px 24px;
+      margin-top: 25px;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-shadow: 0 0 15px rgba(255, 181, 154, 0.6);
+      transition: all 0.25s ease-out;
+      outline: none;
+      z-index: 100;
+    }
+
+    .start-btn-retro:hover {
+      background: transparent;
+      color: #ffb59a;
+      box-shadow: 0 0 25px rgba(255, 181, 154, 0.9);
+    }
   </style>
 </head>
 
@@ -688,6 +713,7 @@
         </div>
 
         <div id="loading-status" class="loading-status-retro">CONNECTING... (0%)</div>
+        <button id="start-btn" class="start-btn-retro" style="display: none;">START TRAVEL</button>
       </div>
     </div>
     <!-- 3D Canvas will be injected here -->

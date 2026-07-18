@@ -7,82 +7,33 @@ import { SandstormParticles } from './particles';
 import * as THREE from 'three';
 
 async function bootstrap() {
-  // Start loop BGM (handling browser autoplay policies)
-  const bgm = new Audio('/Unfinished_Corridor.mp3');
-  bgm.loop = true;
-  bgm.volume = 0.3; // Fallback default soft volume
 
-  let audioCtx: AudioContext | null = null;
-  let gainNode: GainNode | null = null;
-  let isConnected = false;
-
-  const startBGM = () => {
-    // Initialize Web Audio API on first interaction to bypass iOS volume/autoplay bugs
-    if (!isConnected) {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          audioCtx = new AudioContextClass();
-          gainNode = audioCtx.createGain();
-          gainNode.gain.setValueAtTime(1, audioCtx.currentTime); // Soft volume on both mobile and desktop
-
-          const source = audioCtx.createMediaElementSource(bgm);
-          source.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-
-          bgm.volume = 1.5; // Let GainNode handle the volume entirely
-          isConnected = true;
-        }
-      } catch (e) {
-        console.warn('Web Audio API failed to initialize:', e);
-      }
-    }
-
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch((err) => console.warn('Failed to resume AudioContext:', err));
-    }
-
-    bgm.play().then(() => {
-      // Once successfully playing, remove event listeners
-      document.removeEventListener('click', startBGM);
-      document.removeEventListener('keydown', startBGM);
-      document.removeEventListener('touchstart', startBGM);
-    }).catch((error) => {
-      console.warn('Autoplay blocked. Waiting for user interaction to play BGM:', error);
-    });
-  };
-
-  // Try to play immediately (might work if page navigation carried context)
-  startBGM();
-
-  // Fallback to play when user interacts
-  document.addEventListener('click', startBGM);
-  document.addEventListener('keydown', startBGM);
-  document.addEventListener('touchstart', startBGM);
 
   let mapLoaded = false;
   let playerLoaded = false;
+  let bgmLoaded = false;
   let loadingScreenHidden = false;
 
   function hideLoadingScreen() {
     if (loadingScreenHidden) return;
     loadingScreenHidden = true;
 
-    const loadingStatus = document.getElementById('loading-status');
     const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingStatus) {
-      loadingStatus.textContent = 'CONNECTED';
+    if (loadingOverlay) {
+      loadingOverlay.classList.add('hidden');
     }
-    setTimeout(() => {
-      if (loadingOverlay) {
-        loadingOverlay.classList.add('hidden');
-      }
-    }, 500);
   }
 
   function checkLoadingComplete() {
-    if (mapLoaded && playerLoaded) {
-      hideLoadingScreen();
+    if (mapLoaded && playerLoaded && bgmLoaded) {
+      const loadingStatus = document.getElementById('loading-status');
+      const startBtn = document.getElementById('start-btn');
+      if (loadingStatus) {
+        loadingStatus.textContent = 'READY TO TRAVEL';
+      }
+      if (startBtn) {
+        startBtn.style.display = 'block';
+      }
     }
   }
 
@@ -92,13 +43,76 @@ async function bootstrap() {
     checkLoadingComplete();
   });
 
-  // Safety timeout (4.0 seconds) to prevent stuck loading screen in offline mode
+  // Safety timeout (4.0 seconds) to guarantee the start button shows up even if network blocks
   setTimeout(() => {
-    hideLoadingScreen();
+    mapLoaded = true;
+    playerLoaded = true;
+    bgmLoaded = true;
+    checkLoadingComplete();
   }, 4000);
 
   // 1. Scene setup
   const { scene, renderer, camera, groundColliders, wallColliders, dirLight } = createScene();
+
+  // Setup BGM using Three.js Audio API (bypasses Safari volume & playback bugs)
+  const bgmListener = new THREE.AudioListener();
+  camera.add(bgmListener);
+
+  const bgmSound = new THREE.Audio(bgmListener);
+  const audioLoader = new THREE.AudioLoader();
+  let hasInteracted = false;
+
+  audioLoader.load('/Unfinished_Corridor.mp3', (buffer) => {
+    bgmSound.setBuffer(buffer);
+    bgmSound.setLoop(true);
+    bgmSound.setVolume(0.08); // Soft volume on both mobile and desktop
+    bgmLoaded = true;
+    checkLoadingComplete();
+  }, undefined, (err) => {
+    console.error('BGM load error:', err);
+    bgmLoaded = true; // Still allow game to load on sound failure
+    checkLoadingComplete();
+  });
+
+  const startBGM = () => {
+    if (hasInteracted) return;
+    hasInteracted = true;
+    
+    const context = bgmListener.context;
+    if (context && context.state === 'suspended') {
+      context.resume().catch((err) => console.warn('Failed to resume BGM AudioContext:', err));
+      
+      // Play a silent dummy buffer synchronously to transition context to running on iOS Safari
+      try {
+        const dummyBuffer = context.createBuffer(1, 1, 22050);
+        const dummyNode = context.createBufferSource();
+        dummyNode.buffer = dummyBuffer;
+        dummyNode.connect(context.destination);
+        dummyNode.start(0);
+      } catch (e) {
+        console.warn('Failed to play dummy node:', e);
+      }
+    }
+
+    if (bgmSound.buffer && !bgmSound.isPlaying) {
+      try {
+        bgmSound.play();
+      } catch (err) {
+        console.warn('BGM play failed:', err);
+      }
+    }
+  };
+
+  // Connect start button interaction
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) {
+    const handleStartButton = () => {
+      startBGM();
+      hideLoadingScreen();
+    };
+    startBtn.addEventListener('click', handleStartButton);
+    startBtn.addEventListener('touchstart', handleStartButton);
+  }
 
   // Create Sandstorm Particles tracking the camera
   const sandstorm = new SandstormParticles(scene);
@@ -132,7 +146,7 @@ async function bootstrap() {
       if (localPlayer) {
         localPlayer.destroy();
       }
-      localPlayer = new LocalPlayer(scene, camera, network, myId, groundColliders, wallColliders, () => {
+      localPlayer = new LocalPlayer(scene, camera, network, myId, groundColliders, wallColliders, bgmListener, () => {
         playerLoaded = true;
         checkLoadingComplete();
       });

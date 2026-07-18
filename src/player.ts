@@ -84,9 +84,7 @@ export class LocalPlayer {
   private idleAction: THREE.AnimationAction | null = null;
   private isDestroyed = false;
   private modelRotationY = 0; // Face forward (+Z)
-  private footstepAudioCtx: AudioContext | null = null;
-  private footstepGainNode: GainNode | null = null;
-  private footstepBuffer: AudioBuffer | null = null;
+  private footstepSound: THREE.Audio | null = null;
   private playedLeftStep = false;
   private playedRightStep = false;
 
@@ -97,6 +95,7 @@ export class LocalPlayer {
     id: string,
     groundColliders: THREE.Object3D[],
     wallColliders: THREE.Mesh[],
+    audioListener?: THREE.AudioListener,
     onModelLoaded?: () => void
   ) {
     this.scene = scene;
@@ -105,42 +104,20 @@ export class LocalPlayer {
     this.groundColliders = groundColliders;
     this.wallColliders = wallColliders;
 
-    // Initialize AudioContext & GainNode for footsteps (to bypass iOS volume read-only restrictions)
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        this.footstepAudioCtx = new AudioContextClass();
-        this.footstepGainNode = this.footstepAudioCtx.createGain();
-        this.footstepGainNode.gain.setValueAtTime(0.7, this.footstepAudioCtx.currentTime); // Standard step volume
-        this.footstepGainNode.connect(this.footstepAudioCtx.destination);
-      }
-    } catch (e) {
-      console.warn('Web Audio API not supported/blocked for footsteps:', e);
+    // Use the shared AudioListener or initialize a fallback one
+    const listener = audioListener || new THREE.AudioListener();
+    if (!audioListener) {
+      this.camera.add(listener);
     }
 
-    // Fetch and decode StepSound.mp3
-    if (this.footstepAudioCtx) {
-      fetch('/StepSound.mp3')
-        .then((response) => response.arrayBuffer())
-        .then((arrayBuffer) => this.footstepAudioCtx!.decodeAudioData(arrayBuffer))
-        .then((decodedBuffer) => {
-          this.footstepBuffer = decodedBuffer;
-        })
-        .catch((err) => console.error('Failed to load step sound buffer:', err));
-    }
-
-    const unlockSteps = () => {
-      if (this.footstepAudioCtx && this.footstepAudioCtx.state === 'suspended') {
-        this.footstepAudioCtx.resume().catch((err) => console.warn('Failed to resume footstep AudioContext:', err));
+    this.footstepSound = new THREE.Audio(listener);
+    const audioLoader = new THREE.AudioLoader();
+    audioLoader.load('/StepSound.mp3', (buffer) => {
+      if (this.footstepSound) {
+        this.footstepSound.setBuffer(buffer);
+        this.footstepSound.setVolume(0.2); // Standard step volume
       }
-      document.removeEventListener('click', unlockSteps);
-      document.removeEventListener('touchstart', unlockSteps);
-      document.removeEventListener('keydown', unlockSteps);
-    };
-
-    document.addEventListener('click', unlockSteps);
-    document.addEventListener('touchstart', unlockSteps);
-    document.addEventListener('keydown', unlockSteps);
+    }, undefined, (err) => console.error('Failed to load step sound:', err));
 
     this.group = new THREE.Group();
     // Spawn at a default position initially
@@ -378,17 +355,15 @@ export class LocalPlayer {
   }
 
   private playFootstep() {
-    if (!this.footstepAudioCtx || !this.footstepBuffer || !this.footstepGainNode) return;
-    try {
-      const source = this.footstepAudioCtx.createBufferSource();
-      source.buffer = this.footstepBuffer;
-      source.connect(this.footstepGainNode);
-      source.onended = () => {
-        source.disconnect();
-      };
-      source.start(0);
-    } catch (e) {
-      console.warn('Failed to play step sound buffer:', e);
+    if (this.footstepSound && this.footstepSound.buffer) {
+      try {
+        if (this.footstepSound.isPlaying) {
+          this.footstepSound.stop();
+        }
+        this.footstepSound.play();
+      } catch (e) {
+        console.warn('Failed to play step sound:', e);
+      }
     }
   }
 
