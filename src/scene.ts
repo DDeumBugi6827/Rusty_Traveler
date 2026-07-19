@@ -85,24 +85,24 @@ export function createScene() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 0.6;
 
   const appContainer = document.getElementById('app');
   if (appContainer) {
     appContainer.appendChild(renderer.domElement);
   }
 
-  //환경광 진보라빛 전역조명
-  const ambientLight = new THREE.AmbientLight(0x4a3b75, 1);
+  //환경광 진보라빛 전역조명 (그림자 명암 강화를 위해 강도 대폭 감소)
+  const ambientLight = new THREE.AmbientLight(0x4a3b75, 0.20);
   scene.add(ambientLight);
 
-  // Hemisphere light representing ambient reflection from purple sky to ground (Brightened ground color)
-  const hemiLight = new THREE.HemisphereLight(0x280d4f, 0x280d4f, 0.90);
+  // Hemisphere light representing ambient reflection from purple sky to ground (Toned down)
+  const hemiLight = new THREE.HemisphereLight(0x280d4f, 0x280d4f, 0.20);
   hemiLight.position.set(0, 50, 0);
   scene.add(hemiLight);
 
-  // Soft sunset directional light to show shapes in the distance (adjusted to 0.4)
-  const dirLight = new THREE.DirectionalLight(0xff7e33, 0.80); // 따뜻한 우윳빛 주 조명
+  // Soft sunset directional light to show shapes in the distance (Increased intensity to make shadows stronger by comparison)
+  const dirLight = new THREE.DirectionalLight(0xff7e33, 1.30); // 따뜻한 우윳빛 주 조명
   dirLight.position.set(50, 60, 40);
   dirLight.castShadow = true;
   dirLight.shadow.camera.top = 80;
@@ -118,13 +118,13 @@ export function createScene() {
   scene.add(dirLight);
   scene.add(dirLight.target);
 
-  // Secondary soft cyan rim light for subtle neon outlines (adjusted to 0.3)
-  const rimLight = new THREE.DirectionalLight(0x00ffff, 0.25);
+  // Secondary soft cyan rim light for subtle neon outlines (adjusted to 0.15)
+  const rimLight = new THREE.DirectionalLight(0x00ffff, 0.15);
   rimLight.position.set(-50, 20, -40);
   scene.add(rimLight);
 
-  // Bottom fill light to illuminate the lower hemisphere of the spherical planet map (Significantly brightened)
-  const bottomLight = new THREE.DirectionalLight(0x4a3b75, 0.65);
+  // Bottom fill light to illuminate the lower hemisphere of the spherical planet map (Reduced to avoid washing out shadows)
+  const bottomLight = new THREE.DirectionalLight(0x4a3b75, 0.10);
   bottomLight.position.set(0, -60, 0);
   scene.add(bottomLight);
 
@@ -190,6 +190,24 @@ export function createScene() {
                   map.minFilter = THREE.NearestFilter;
                   map.needsUpdate = true;
                 }
+                const roughnessMap = (mat as any).roughnessMap;
+                if (roughnessMap) {
+                  roughnessMap.magFilter = THREE.NearestFilter;
+                  roughnessMap.minFilter = THREE.NearestFilter;
+                  roughnessMap.needsUpdate = true;
+                }
+                const metalnessMap = (mat as any).metalnessMap;
+                if (metalnessMap) {
+                  metalnessMap.magFilter = THREE.NearestFilter;
+                  metalnessMap.minFilter = THREE.NearestFilter;
+                  metalnessMap.needsUpdate = true;
+                }
+                const normalMap = (mat as any).normalMap;
+                if (normalMap) {
+                  normalMap.magFilter = THREE.NearestFilter;
+                  normalMap.minFilter = THREE.NearestFilter;
+                  normalMap.needsUpdate = true;
+                }
                 if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
                   mat.depthWrite = true;
                   mat.depthTest = true;
@@ -197,6 +215,9 @@ export function createScene() {
                   if ((mat as any).alphaTest === 0) {
                     (mat as any).alphaTest = 0.5;
                   }
+                }
+                if ('envMapIntensity' in mat) {
+                  (mat as any).envMapIntensity = 0.4;
                 }
               }
             };
@@ -224,6 +245,30 @@ export function createScene() {
                     map.generateMipmaps = true;
                     map.anisotropy = renderer.capabilities.getMaxAnisotropy();
                     map.needsUpdate = true;
+                  }
+                  const roughnessMap = (mat as any).roughnessMap;
+                  if (roughnessMap) {
+                    roughnessMap.minFilter = THREE.NearestMipmapLinearFilter;
+                    roughnessMap.magFilter = THREE.NearestFilter;
+                    roughnessMap.generateMipmaps = true;
+                    roughnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    roughnessMap.needsUpdate = true;
+                  }
+                  const metalnessMap = (mat as any).metalnessMap;
+                  if (metalnessMap) {
+                    metalnessMap.minFilter = THREE.NearestMipmapLinearFilter;
+                    metalnessMap.magFilter = THREE.NearestFilter;
+                    metalnessMap.generateMipmaps = true;
+                    metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    metalnessMap.needsUpdate = true;
+                  }
+                  const normalMap = (mat as any).normalMap;
+                  if (normalMap) {
+                    normalMap.minFilter = THREE.NearestMipmapLinearFilter;
+                    normalMap.magFilter = THREE.NearestFilter;
+                    normalMap.generateMipmaps = true;
+                    normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    normalMap.needsUpdate = true;
                   }
                 }
               };
@@ -353,6 +398,24 @@ export function createScene() {
                   map.minFilter = THREE.NearestFilter;
                   map.needsUpdate = true;
                 }
+                const roughnessMap = (mat as any).roughnessMap;
+                if (roughnessMap) {
+                  roughnessMap.magFilter = THREE.NearestFilter;
+                  roughnessMap.minFilter = THREE.NearestFilter;
+                  roughnessMap.needsUpdate = true;
+                }
+                const metalnessMap = (mat as any).metalnessMap;
+                if (metalnessMap) {
+                  metalnessMap.magFilter = THREE.NearestFilter;
+                  metalnessMap.minFilter = THREE.NearestFilter;
+                  metalnessMap.needsUpdate = true;
+                }
+                const normalMap = (mat as any).normalMap;
+                if (normalMap) {
+                  normalMap.magFilter = THREE.NearestFilter;
+                  normalMap.minFilter = THREE.NearestFilter;
+                  normalMap.needsUpdate = true;
+                }
                 if ((mat as any).transparent || (mat as any).opacity < 1.0 || (mat as any).alphaMap) {
                   mat.depthWrite = true;
                   mat.depthTest = true;
@@ -360,6 +423,9 @@ export function createScene() {
                   if ((mat as any).alphaTest === 0) {
                     (mat as any).alphaTest = 0.5;
                   }
+                }
+                if ('envMapIntensity' in mat) {
+                  (mat as any).envMapIntensity = 0.4;
                 }
               }
             };
@@ -461,5 +527,5 @@ export function createScene() {
     renderer.setPixelRatio(1);
   });
 
-  return { scene, renderer, camera, groundColliders, wallColliders, dirLight };
+  return { scene, renderer, camera, groundColliders, wallColliders, dirLight, hemiLight };
 }

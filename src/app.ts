@@ -5,6 +5,7 @@ import { LocalPlayer, PeerPlayer } from './player';
 import { GameUI } from './ui';
 import { SandstormParticles } from './particles';
 import * as THREE from 'three';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 async function bootstrap() {
 
@@ -52,7 +53,17 @@ async function bootstrap() {
   }, 4000);
 
   // 1. Scene setup
-  const { scene, renderer, camera, groundColliders, wallColliders, dirLight } = createScene();
+  const { scene, renderer, camera, groundColliders, wallColliders, dirLight, hemiLight } = createScene();
+
+  // Load environment map for PBR reflections (Roughness/Metallic textures on models)
+  const rgbeLoader = new RGBELoader();
+  rgbeLoader.load('/sunny_vondelpark_2k.hdr', (texture) => {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = texture;
+    console.log('Environment map loaded successfully.');
+  }, undefined, (err) => {
+    console.error('Error loading environment map:', err);
+  });
 
   // Setup BGM using Three.js Audio API (bypasses Safari volume & playback bugs)
   const bgmListener = new THREE.AudioListener();
@@ -77,11 +88,11 @@ async function bootstrap() {
   const startBGM = () => {
     if (hasInteracted) return;
     hasInteracted = true;
-    
+
     const context = bgmListener.context;
     if (context && context.state === 'suspended') {
       context.resume().catch((err) => console.warn('Failed to resume BGM AudioContext:', err));
-      
+
       // Play a silent dummy buffer synchronously to transition context to running on iOS Safari
       try {
         const dummyBuffer = context.createBuffer(1, 1, 22050);
@@ -129,6 +140,23 @@ async function bootstrap() {
 
   // 3. UI setup
   const ui = new GameUI(network);
+
+  const lookupBtn = document.getElementById('lookup-btn') as HTMLButtonElement | null;
+  const lookupBtnText = document.getElementById('lookup-btn-text') as HTMLSpanElement | null;
+  if (lookupBtn && lookupBtnText) {
+    lookupBtn.addEventListener('click', () => {
+      if (localPlayer && !localPlayer.isMoving) {
+        localPlayer.isLookingUp = !localPlayer.isLookingUp;
+        if (localPlayer.isLookingUp) {
+          lookupBtn.classList.add('active');
+          lookupBtnText.textContent = 'RESET VIEW';
+        } else {
+          lookupBtn.classList.remove('active');
+          lookupBtnText.textContent = 'LOOK UP';
+        }
+      }
+    });
+  }
 
   // Local Emoji handler
   ui.setOnLocalEmoji((emoji) => {
@@ -240,6 +268,30 @@ async function bootstrap() {
     if (localPlayer) {
       localPlayer.update();
 
+      // Sync Lookup button state in the game loop
+      if (lookupBtn && lookupBtnText) {
+        if (localPlayer.isMoving) {
+          lookupBtn.disabled = true;
+          lookupBtn.classList.remove('active');
+          lookupBtnText.textContent = 'LOOK UP';
+        } else {
+          lookupBtn.disabled = false;
+          if (localPlayer.isLookingUp) {
+            lookupBtn.classList.add('active');
+            lookupBtnText.textContent = 'RESET VIEW';
+          } else {
+            lookupBtn.classList.remove('active');
+            lookupBtnText.textContent = 'LOOK UP';
+          }
+        }
+      }
+
+      // Dynamically update HemisphereLight position to align with player's local Up normal on the planet sphere
+      if (hemiLight) {
+        const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(localPlayer.group.quaternion);
+        hemiLight.position.copy(localUp).multiplyScalar(50);
+      }
+
       // Dynamically update directional light position to track player in spherical space
       if (dirLight) {
         const playerPos = localPlayer.group.position;
@@ -252,6 +304,12 @@ async function bootstrap() {
         // Position the light offset from the player along the constant world sun direction
         dirLight.position.copy(playerPos).addScaledVector(sunDirection, distance);
         dirLight.target.position.copy(playerPos);
+      }
+    } else {
+      if (lookupBtn && lookupBtnText) {
+        lookupBtn.disabled = true;
+        lookupBtn.classList.remove('active');
+        lookupBtnText.textContent = 'LOOK UP';
       }
     }
 

@@ -694,6 +694,60 @@
       color: #ffb59a;
       box-shadow: 0 0 25px rgba(255, 181, 154, 0.9);
     }
+
+    /* Bottom Left: Look Up Button Styles */
+    .lookup-panel {
+      grid-column: 1;
+      grid-row: 3;
+      align-self: end;
+      justify-self: start;
+    }
+
+    .lookup-btn {
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 12px 20px;
+      color: var(--text-color);
+      font-family: var(--accent-font);
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto; /* Ensure clicks are captured */
+    }
+
+    .lookup-btn:hover:not(:disabled) {
+      background: var(--bg-glass-hover);
+      border-color: var(--border-glass-active);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(56, 189, 248, 0.25);
+    }
+
+    .lookup-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .lookup-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      border-color: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+    }
+
+    .lookup-btn.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    }
   </style>
 </head>
 
@@ -785,6 +839,16 @@
         <button class="emoji-btn" data-emoji="🎉">🎉</button>
         <button class="emoji-btn" data-emoji="😮">😮</button>
       </footer>
+
+      <!-- Bottom Left: Look Up Button -->
+      <div class="lookup-panel">
+        <button id="lookup-btn" class="lookup-btn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+          <span id="lookup-btn-text">LOOK UP</span>
+        </button>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/app.ts"></script>

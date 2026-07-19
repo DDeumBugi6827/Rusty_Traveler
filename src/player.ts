@@ -55,6 +55,8 @@ interface FloatingEmoji {
 
 export class LocalPlayer {
   public group: THREE.Group;
+  public isMoving = false;
+  public isLookingUp = false;
   private scene: THREE.Scene;
   private camera: THREE.Camera;
   private network: WebSocketNetwork;
@@ -77,6 +79,7 @@ export class LocalPlayer {
   // GLB Model & Animation Properties
   private placeholder: THREE.Mesh;
   private visorPlaceholder: THREE.Mesh;
+  private flashlight: THREE.SpotLight | null = null;
   private model: THREE.Group | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private clock = new THREE.Clock();
@@ -149,7 +152,7 @@ export class LocalPlayer {
     this.visorPlaceholder = visor;
 
     // Flashlight SpotLight setup for LocalPlayer (White, eye-level, positioned slightly forward to prevent self-shadowing)
-    const flashlight = new THREE.SpotLight(0xffffff, 15, 25, Math.PI / 6, 0.5, 1.0);
+    const flashlight = new THREE.SpotLight(0xffffff, 30, 25, Math.PI / 6, 0.5, 1.0);
     flashlight.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 0.35 * (PLAYER_HEIGHT / 1.5));
     flashlight.target.position.set(0, 1.25 * (PLAYER_HEIGHT / 1.5), 5);
     flashlight.castShadow = true;
@@ -158,6 +161,7 @@ export class LocalPlayer {
     flashlight.shadow.mapSize.height = 512;
     this.group.add(flashlight);
     this.group.add(flashlight.target);
+    this.flashlight = flashlight;
 
     // Asynchronous GLB model load
     const loader = new GLTFLoader();
@@ -513,8 +517,12 @@ export class LocalPlayer {
       .addScaledVector(localForward, -followDistance)
       .addScaledVector(localUp, followHeight);
 
-    // Camera looks at the player (slightly offset up along ground normal)
-    const targetLookAt = this.group.position.clone().addScaledVector(localUp, PLAYER_HEIGHT * (1.0 / 1.5));
+    // Camera looks at the player (slightly offset up along ground normal, and raised when looking up)
+    let lookOffset = PLAYER_HEIGHT * (1.0 / 1.5);
+    if (this.isLookingUp) {
+      lookOffset += 5.0; // Elevate look-at point by 7 units to look up at sky and buildings
+    }
+    const targetLookAt = this.group.position.clone().addScaledVector(localUp, lookOffset);
 
     if (this.isFirstUpdate) {
       this.smoothedLookAt.copy(targetLookAt);
@@ -534,6 +542,13 @@ export class LocalPlayer {
     }
 
     this.camera.lookAt(this.smoothedLookAt);
+
+    // Update flashlight target position Y to tilt up/down in sync with look-up view
+    if (this.flashlight) {
+      const normalY = 1.25 * (PLAYER_HEIGHT / 1.5);
+      const targetY = this.isLookingUp ? (normalY + 5.0) : normalY;
+      this.flashlight.target.position.y = THREE.MathUtils.lerp(this.flashlight.target.position.y, targetY, 0.04);
+    }
 
     // Network update rate control (10Hz)
     const now = performance.now();
@@ -583,6 +598,11 @@ export class LocalPlayer {
         this.keys['d'] || this.keys['arrowright'] ||
         Math.abs(this.joystickInput.x) > 0.01 ||
         Math.abs(this.joystickInput.y) > 0.01;
+
+      this.isMoving = isInputActive;
+      if (isInputActive) {
+        this.isLookingUp = false;
+      }
 
       if (isInputActive) {
         if (this.walkAction && !this.walkAction.isRunning()) {
