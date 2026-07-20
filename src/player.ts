@@ -6,22 +6,59 @@ import type { WebSocketNetwork, Position } from './network';
 const PLAYER_HEIGHT = 1.0;
 const PLAYER_COLLIDER_RADIUS = 0.35;
 
-// Toon shading 3-step gradient map for players via canvas (highly compatible)
+// Toon shading 4-step gradient map for retro pixel character cell-shading
 const canvasGradient = document.createElement('canvas');
-canvasGradient.width = 3;
+canvasGradient.width = 4;
 canvasGradient.height = 1;
 const ctxGradient = canvasGradient.getContext('2d');
 if (ctxGradient) {
-  ctxGradient.fillStyle = '#000000'; // Dark shadow
+  ctxGradient.fillStyle = '#111122'; // Shadow
   ctxGradient.fillRect(0, 0, 1, 1);
-  ctxGradient.fillStyle = '#787878'; // Mid shadow
+  ctxGradient.fillStyle = '#555577'; // Mid shadow
   ctxGradient.fillRect(1, 0, 1, 1);
-  ctxGradient.fillStyle = '#ffffff'; // Light
+  ctxGradient.fillStyle = '#aaaacc'; // Light tone
   ctxGradient.fillRect(2, 0, 1, 1);
+  ctxGradient.fillStyle = '#ffffff'; // Highlight
+  ctxGradient.fillRect(3, 0, 1, 1);
 }
 const toonGradient = new THREE.CanvasTexture(canvasGradient);
 toonGradient.minFilter = THREE.NearestFilter;
 toonGradient.magFilter = THREE.NearestFilter;
+toonGradient.generateMipmaps = false;
+
+function convertToPixelToonMaterial(oldMat: THREE.Material): THREE.MeshToonMaterial {
+  const mat = oldMat as any;
+  if (mat.map) {
+    mat.map.magFilter = THREE.NearestFilter;
+    mat.map.minFilter = THREE.NearestFilter;
+    mat.map.generateMipmaps = false;
+    mat.map.needsUpdate = true;
+  }
+
+  const toonMat = new THREE.MeshToonMaterial({
+    color: mat.color ? mat.color.clone() : new THREE.Color(0xffffff),
+    map: mat.map || null,
+    gradientMap: toonGradient,
+    transparent: mat.transparent || false,
+    opacity: mat.opacity !== undefined ? mat.opacity : 1.0,
+    alphaTest: mat.alphaTest || 0,
+    wireframe: mat.wireframe || false,
+    side: mat.side || THREE.FrontSide,
+  });
+
+  if (mat.emissive && (mat.emissive.r > 0 || mat.emissive.g > 0 || mat.emissive.b > 0)) {
+    (toonMat as any).emissive = mat.emissive.clone();
+    (toonMat as any).emissiveIntensity = mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : 1.0;
+    if (mat.emissiveMap) {
+      (toonMat as any).emissiveMap = mat.emissiveMap;
+      (toonMat as any).emissiveMap.magFilter = THREE.NearestFilter;
+      (toonMat as any).emissiveMap.minFilter = THREE.NearestFilter;
+      (toonMat as any).emissiveMap.generateMipmaps = false;
+    }
+  }
+
+  return toonMat;
+}
 
 export function createEmojiSprite(emoji: string) {
   const canvas = document.createElement('canvas');
@@ -188,20 +225,10 @@ export class LocalPlayer {
             node.receiveShadow = true;
             node.layers.enable(1);
 
-            const adjustMaterial = (mat: THREE.Material) => {
-              if (mat) {
-                const map = (mat as any).map;
-                if (map) {
-                  map.magFilter = THREE.NearestFilter;
-                  map.minFilter = THREE.NearestFilter;
-                  map.needsUpdate = true;
-                }
-              }
-            };
             if (Array.isArray(node.material)) {
-              node.material.forEach(adjustMaterial);
+              node.material = node.material.map((m) => convertToPixelToonMaterial(m));
             } else if (node.material) {
-              adjustMaterial(node.material);
+              node.material = convertToPixelToonMaterial(node.material);
             }
           }
         });
@@ -803,20 +830,10 @@ export class PeerPlayer {
             node.receiveShadow = true;
             node.layers.enable(1);
 
-            const adjustMaterial = (mat: THREE.Material) => {
-              if (mat) {
-                const map = (mat as any).map;
-                if (map) {
-                  map.magFilter = THREE.NearestFilter;
-                  map.minFilter = THREE.NearestFilter;
-                  map.needsUpdate = true;
-                }
-              }
-            };
             if (Array.isArray(node.material)) {
-              node.material.forEach(adjustMaterial);
+              node.material = node.material.map((m) => convertToPixelToonMaterial(m));
             } else if (node.material) {
-              adjustMaterial(node.material);
+              node.material = convertToPixelToonMaterial(node.material);
             }
           }
         });

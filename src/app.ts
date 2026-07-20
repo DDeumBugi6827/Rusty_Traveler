@@ -57,7 +57,7 @@ async function bootstrap() {
 
   // Load environment map for PBR reflections (Roughness/Metallic textures on models)
   const rgbeLoader = new RGBELoader();
-  rgbeLoader.load('/sunny_vondelpark_2k.hdr', (texture) => {
+  rgbeLoader.load('/satara_night_2k.hdr', (texture) => {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = texture;
     console.log('Environment map loaded successfully.');
