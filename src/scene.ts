@@ -235,6 +235,7 @@ export function createScene() {
             groundColliders.push(child);
 
             // Apply mipmapping and anisotropy to ground textures to fix shimmering
+
             if (child.material) {
               const adjustGroundMaterial = (mat: THREE.Material) => {
                 if (mat) {
@@ -278,6 +279,7 @@ export function createScene() {
                 adjustGroundMaterial(child.material);
               }
             }
+
           }
         }
       });
